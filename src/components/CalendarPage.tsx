@@ -1,15 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { JournalEntry } from '../types';
+import { Bell, BellOff, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { JournalEntry, JournalReminderSaveResult } from '../types';
 import { cn } from '../lib/utils';
 import { buildMonthGrid, formatDateKey, getChineseWeekday, parseDateKey } from '../features/calendar/dateUtils';
+import {
+  buildDefaultReminderParts,
+  buildLocalReminderIso,
+  buildReminderSelectOptions,
+  isFutureReminderAt,
+  parseLocalReminderIso,
+  ReminderDateParts,
+} from '../features/calendar/journalReminder';
 
 interface CalendarPageProps {
   entries: JournalEntry[];
-  onAddEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onUpdateEntry: (id: string, updates: Pick<JournalEntry, 'title' | 'content'>) => void;
-  onDeleteEntry: (id: string) => void;
+  onAddEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => Promise<JournalReminderSaveResult>;
+  onUpdateEntry: (
+    id: string,
+    updates: Pick<JournalEntry, 'title' | 'content' | 'reminderEnabled' | 'reminderAt'>,
+  ) => Promise<JournalReminderSaveResult>;
+  onDeleteEntry: (id: string) => Promise<void> | void;
 }
 
 const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
@@ -29,9 +40,22 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderParts, setReminderParts] = useState<ReminderDateParts>(() => buildDefaultReminderParts(todayKey, today));
+  const [reminderError, setReminderError] = useState('');
+  const [reminderNotice, setReminderNotice] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const monthGrid = useMemo(
     () => buildMonthGrid(visibleMonth.getFullYear(), visibleMonth.getMonth()),
     [visibleMonth],
+  );
+  const reminderOptions = useMemo(() => buildReminderSelectOptions(today), []);
+  const reminderDayOptions = useMemo(
+    () => Array.from(
+      { length: getDaysInMonth(reminderParts.year, reminderParts.month) },
+      (_, index) => index + 1,
+    ),
+    [reminderParts.month, reminderParts.year],
   );
   const selectedEntries = entries
     .filter((entry) => entry.date === selectedDateKey)
@@ -46,6 +70,10 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     setEditingId(null);
     setTitle('');
     setContent('');
+    setReminderEnabled(false);
+    setReminderParts(buildDefaultReminderParts(formatDateKey(date), today));
+    setReminderError('');
+    setReminderNotice('');
     setModalMode('list');
     setIsDayModalOpen(true);
   };
@@ -54,6 +82,10 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     setEditingId(entry.id);
     setTitle(entry.title);
     setContent(entry.content);
+    setReminderEnabled(Boolean(entry.reminderEnabled && entry.reminderAt));
+    setReminderParts(entry.reminderAt ? parseLocalReminderIso(entry.reminderAt) : buildDefaultReminderParts(entry.date, today));
+    setReminderError('');
+    setReminderNotice('');
     setModalMode('form');
   };
 
@@ -61,32 +93,86 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     setEditingId(null);
     setTitle('');
     setContent('');
+    setReminderEnabled(false);
+    setReminderParts(buildDefaultReminderParts(selectedDateKey, today));
+    setReminderError('');
+    setReminderNotice('');
     setModalMode('form');
   };
 
-  const saveEntry = () => {
+  const saveEntry = async () => {
     const normalizedTitle = title.trim();
     const normalizedContent = content.trim();
     if (!normalizedTitle && !normalizedContent) return;
+    if (isSaving) return;
 
+    setReminderError('');
+    setReminderNotice('');
+    const reminderAt = reminderEnabled ? buildLocalReminderIso(reminderParts) : undefined;
+    if (reminderAt && !isFutureReminderAt(reminderAt)) {
+      setReminderError('提醒时间需要晚于当前时间。');
+      return;
+    }
+
+    setIsSaving(true);
+    let result: JournalReminderSaveResult;
     if (editingId) {
-      onUpdateEntry(editingId, {
+      result = await onUpdateEntry(editingId, {
         title: normalizedTitle || '无题随笔',
         content: normalizedContent,
+        reminderEnabled,
+        reminderAt,
       });
     } else {
-      onAddEntry({
+      result = await onAddEntry({
         date: selectedDateKey,
         title: normalizedTitle || '无题随笔',
         content: normalizedContent,
+        reminderEnabled,
+        reminderAt,
       });
     }
 
+    setIsSaving(false);
     setEditingId(null);
     setTitle('');
     setContent('');
+    setReminderEnabled(false);
+    setReminderParts(buildDefaultReminderParts(selectedDateKey, today));
+    setReminderNotice(
+      result.permissionDenied
+        ? '通知权限未开启，随笔已保存但提醒未启用。'
+        : result.reminderScheduled
+          ? '提醒已安排，到点会发送系统通知。'
+          : '',
+    );
     setModalMode('list');
   };
+
+  const updateReminderPart = (key: keyof ReminderDateParts, value: string) => {
+    setReminderParts((current) => {
+      const next = { ...current, [key]: Number(value) };
+      const maxDay = getDaysInMonth(next.year, next.month);
+      return { ...next, day: Math.min(next.day, maxDay) };
+    });
+  };
+
+  const renderReminderSelect = (label: string, key: keyof ReminderDateParts, values: number[]) => (
+    <label className="min-w-0">
+      <span className="mb-1 block text-[9px] font-bold tracking-widest opacity-40">{label}</span>
+      <select
+        value={reminderParts[key]}
+        onChange={(event) => updateReminderPart(key, event.target.value)}
+        className="w-full rounded-xl border border-nature-border bg-nature-bg px-2 py-2 text-xs font-bold outline-none"
+      >
+        {values.map((value) => (
+          <option key={value} value={value}>
+            {String(value).padStart(label === '年' ? 4 : 2, '0')}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   const dayModal = (
     <div className="fixed inset-0 z-[100] bg-[#4a4a3544] backdrop-blur-sm flex items-center justify-center px-5 py-8">
@@ -109,6 +195,11 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
 
         {modalMode === 'list' ? (
           <>
+            {reminderNotice && (
+              <div className="mb-3 rounded-2xl border border-nature-primary/20 bg-nature-primary/10 px-4 py-3 text-xs font-bold leading-5 text-nature-primary">
+                {reminderNotice}
+              </div>
+            )}
             <div className="space-y-3 mb-5">
               {selectedEntries.map((entry) => (
                 <button
@@ -123,6 +214,12 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
                     </span>
                   </div>
                   <p className="text-xs leading-5 opacity-60 line-clamp-3 whitespace-pre-wrap">{entry.content || '没有正文。'}</p>
+                  {entry.reminderEnabled && entry.reminderAt && (
+                    <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-nature-primary/10 px-3 py-1 text-[10px] font-bold tracking-widest text-nature-primary">
+                      <Bell className="w-3 h-3" />
+                      {formatReminderDisplay(entry.reminderAt)}
+                    </div>
+                  )}
                 </button>
               ))}
               {selectedEntries.length === 0 && (
@@ -147,12 +244,14 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
               </div>
               {editingId && (
                 <button
-                  onClick={() => {
-                    onDeleteEntry(editingId);
+                  onClick={async () => {
+                    await onDeleteEntry(editingId);
                     setModalMode('list');
                     setEditingId(null);
                     setTitle('');
                     setContent('');
+                    setReminderEnabled(false);
+                    setReminderError('');
                   }}
                   className="text-nature-secondary opacity-80"
                   aria-label="删除随笔"
@@ -173,6 +272,42 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
               placeholder="记录今天的想法、安排或复盘..."
               className="w-full min-h-36 bg-transparent outline-none text-sm leading-6 resize-none"
             />
+            <div className="mt-4 rounded-2xl border border-nature-border bg-nature-bg/70 p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setReminderEnabled(!reminderEnabled);
+                  setReminderError('');
+                }}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <span className="flex items-center gap-2 text-xs font-bold tracking-widest">
+                  {reminderEnabled ? <Bell className="w-4 h-4 text-nature-primary" /> : <BellOff className="w-4 h-4 opacity-40" />}
+                  提醒我
+                </span>
+                <span className="text-[10px] font-bold tracking-widest opacity-50">
+                  {reminderEnabled ? '已开启' : '未开启'}
+                </span>
+              </button>
+              {reminderEnabled && (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    {renderReminderSelect('年', 'year', reminderOptions.years)}
+                    {renderReminderSelect('月', 'month', reminderOptions.months)}
+                    {renderReminderSelect('日', 'day', reminderDayOptions)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderReminderSelect('时', 'hour', reminderOptions.hours)}
+                    {renderReminderSelect('分', 'minute', reminderOptions.minutes)}
+                  </div>
+                  {reminderError && (
+                    <p className="text-[10px] font-bold tracking-widest text-nature-secondary">
+                      {reminderError}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button
                 onClick={() => setModalMode('list')}
@@ -182,9 +317,10 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
               </button>
               <button
                 onClick={saveEntry}
-                className="py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest"
+                disabled={isSaving}
+                className="py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest disabled:opacity-50"
               >
-                {editingId ? '保存修改' : '保存随笔'}
+                {isSaving ? '保存中' : editingId ? '保存修改' : '保存随笔'}
               </button>
             </div>
           </div>
@@ -272,3 +408,12 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     </div>
   );
 };
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function formatReminderDisplay(reminderAt: string): string {
+  const parts = parseLocalReminderIso(reminderAt);
+  return `${parts.month}月${parts.day}日 ${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+}

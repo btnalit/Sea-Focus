@@ -56,6 +56,9 @@ test('saves and loads tasks, focus records, and journal entries through the fron
       content: '记录今天的安排。',
       createdAt: '2026-04-24T09:00:00.000Z',
       updatedAt: '2026-04-24T09:00:00.000Z',
+      reminderEnabled: true,
+      reminderAt: '2026-04-24T21:30:00',
+      reminderNotificationId: 12345,
     },
   ];
 

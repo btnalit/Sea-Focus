@@ -16,6 +16,14 @@ export interface JournalEntry {
   content: string;
   createdAt: string;
   updatedAt: string;
+  reminderEnabled?: boolean;
+  reminderAt?: string;
+  reminderNotificationId?: number;
+}
+
+export interface JournalReminderSaveResult {
+  reminderScheduled: boolean;
+  permissionDenied: boolean;
 }
 
 export type FocusTaskLinkStatus = 'active' | 'archived' | 'deleted';

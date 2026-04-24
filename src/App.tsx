@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AppTab, Task, FocusRecord, JournalEntry } from './types';
+import { AppTab, Task, FocusRecord, JournalEntry, JournalReminderSaveResult } from './types';
 import { BottomNav } from './components/BottomNav';
 import { FocusPage } from './components/FocusPage';
 import { PlanPage } from './components/PlanPage';
@@ -14,6 +14,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
 import { deleteTaskById, toggleTaskCompletion } from './features/plan/taskLifecycle';
 import { buildPlanHeaderStats } from './features/plan/planHeaderStats';
+import {
+  buildJournalReminderNotification,
+  buildReminderNotificationId,
+  isFutureReminderAt,
+} from './features/calendar/journalReminder';
+import { journalReminderNotifications } from './api/journalReminderNotifications';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('focus');
@@ -61,25 +67,94 @@ export default function App() {
     setRecords([newRecord, ...records]);
   };
 
-  const addJournalEntry = (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addJournalEntry = async (
+    entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<JournalReminderSaveResult> => {
     const now = new Date().toISOString();
-    const newEntry: JournalEntry = {
+    const draftEntry: JournalEntry = {
       ...entry,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: now,
       updatedAt: now,
     };
+    const { entry: newEntry, result } = await prepareJournalReminder(draftEntry);
     setJournalEntries([newEntry, ...journalEntries]);
+    return result;
   };
 
-  const updateJournalEntry = (id: string, updates: Pick<JournalEntry, 'title' | 'content'>) => {
+  const updateJournalEntry = async (
+    id: string,
+    updates: Pick<JournalEntry, 'title' | 'content' | 'reminderEnabled' | 'reminderAt'>,
+  ): Promise<JournalReminderSaveResult> => {
+    const existingEntry = journalEntries.find((entry) => entry.id === id);
+    if (!existingEntry) {
+      return { reminderScheduled: false, permissionDenied: false };
+    }
+
+    const draftEntry: JournalEntry = {
+      ...existingEntry,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    const { entry: updatedEntry, result } = await prepareJournalReminder(
+      draftEntry,
+      existingEntry.reminderNotificationId,
+    );
+
     setJournalEntries(journalEntries.map((entry) => (
-      entry.id === id ? { ...entry, ...updates, updatedAt: new Date().toISOString() } : entry
+      entry.id === id ? updatedEntry : entry
     )));
+    return result;
   };
 
-  const deleteJournalEntry = (id: string) => {
+  const deleteJournalEntry = async (id: string) => {
+    const existingEntry = journalEntries.find((entry) => entry.id === id);
+    if (existingEntry?.reminderNotificationId) {
+      await journalReminderNotifications.cancel(existingEntry.reminderNotificationId);
+    }
     setJournalEntries(journalEntries.filter((entry) => entry.id !== id));
+  };
+
+  const prepareJournalReminder = async (
+    entry: JournalEntry,
+    previousNotificationId?: number,
+  ): Promise<{ entry: JournalEntry; result: JournalReminderSaveResult }> => {
+    if (previousNotificationId) {
+      await journalReminderNotifications.cancel(previousNotificationId);
+    }
+
+    if (!entry.reminderEnabled || !entry.reminderAt || !isFutureReminderAt(entry.reminderAt)) {
+      return {
+        entry: clearJournalReminder(entry),
+        result: { reminderScheduled: false, permissionDenied: false },
+      };
+    }
+
+    const reminderEntry: JournalEntry = {
+      ...entry,
+      reminderEnabled: true,
+      reminderNotificationId: buildReminderNotificationId(entry.id),
+    };
+    const scheduleResult = await journalReminderNotifications.schedule(
+      buildJournalReminderNotification(reminderEntry),
+    );
+
+    if (!scheduleResult.scheduled) {
+      return {
+        entry: clearJournalReminder(reminderEntry),
+        result: { reminderScheduled: false, permissionDenied: scheduleResult.permission === 'denied' },
+      };
+    }
+
+    return {
+      entry: reminderEntry,
+      result: { reminderScheduled: true, permissionDenied: false },
+    };
+  };
+
+  const clearJournalReminder = (entry: JournalEntry): JournalEntry => {
+    const { reminderAt, reminderEnabled, reminderNotificationId, ...entryWithoutReminder } = entry;
+    return entryWithoutReminder;
   };
 
   return (
