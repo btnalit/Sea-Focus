@@ -78,6 +78,17 @@ function hasOwnKey(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
 
+/**
+ * Returns true when a workflow trigger ignores the requested path pattern.
+ *
+ * @param {unknown} trigger workflow trigger config
+ * @param {string} pathPattern ignored path pattern to find
+ * @returns {boolean} whether the trigger contains the ignore pattern
+ */
+function hasPathIgnore(trigger, pathPattern) {
+  return Array.isArray(trigger?.['paths-ignore']) && trigger['paths-ignore'].includes(pathPattern)
+}
+
 const pkg = readPackageJson()
 const scripts = pkg.scripts ?? {}
 const dependencies = pkg.dependencies ?? {}
@@ -148,6 +159,8 @@ if (existsSync(workflowPath)) {
   check(hasOwnKey(triggers, 'push'), 'workflow must run on push')
   check(hasOwnKey(triggers, 'pull_request'), 'workflow must run on pull_request')
   check(hasOwnKey(triggers, 'workflow_dispatch'), 'workflow must support workflow_dispatch')
+  check(hasPathIgnore(triggers.push, 'docs/**'), 'workflow push trigger must ignore docs/** changes')
+  check(hasPathIgnore(triggers.pull_request, 'docs/**'), 'workflow pull_request trigger must ignore docs/** changes')
   check(androidJob?.['runs-on'] === 'ubuntu-24.04', 'android-release-apk job must run on ubuntu-24.04')
   check(hasActionStep(steps, 'actions/checkout@'), 'workflow must checkout the repository')
   check(hasActionStep(steps, 'actions/setup-node@'), 'workflow must set up Node.js')
