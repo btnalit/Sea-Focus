@@ -158,7 +158,8 @@ if (existsSync(workflowPath)) {
   check(hasRunStep(steps, 'npm run test:ci-config'), 'workflow must run CI config validation')
   check(hasRunStep(steps, 'npm run build'), 'workflow must build the Vite app')
   check(hasRunStep(steps, 'npx cap sync android'), 'workflow must sync Capacitor Android assets')
-  check(hasRunStep(steps, 'sdkmanager "platforms;android-36" "build-tools;36.0.0"'), 'workflow must ensure Android SDK 36 build components')
+  check(hasRunStep(steps, 'SDKMANAGER='), 'workflow must resolve sdkmanager from ANDROID_HOME')
+  check(hasRunStep(steps, '"$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"'), 'workflow must ensure Android SDK 36 build components through resolved sdkmanager')
   check(hasRunStep(steps, './gradlew assembleDebug'), 'workflow must build the Android debug APK')
   check(
     steps.some((step) => step.uses === 'actions/upload-artifact@v4' && step.with?.name === 'sea-focus-debug-apk'),
