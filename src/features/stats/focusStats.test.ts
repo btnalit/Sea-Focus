@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFocusStats } from './focusStats';
+import { buildFocusStats, getFocusRecordsForPeriod } from './focusStats';
 import { FocusRecord } from '../../types';
 
 const records: FocusRecord[] = [
@@ -69,4 +69,39 @@ test('returns empty distributions when there are no records', () => {
   assert.equal(stats.totalSeconds, 0);
   assert.deepEqual(stats.todayDistribution, []);
   assert.deepEqual(stats.totalDistribution, []);
+});
+
+test('filters focus records by day, week, and month periods', () => {
+  const mixedRecords: FocusRecord[] = [
+    ...records,
+    {
+      id: 'next-day',
+      type: 'pomodoro',
+      duration: 900,
+      category: '学习成长',
+      timestamp: '2026-04-25T10:00:00+08:00',
+    },
+    {
+      id: 'previous-month',
+      type: 'pomodoro',
+      duration: 600,
+      category: '复盘',
+      timestamp: '2026-03-31T10:00:00+08:00',
+    },
+  ];
+  const now = new Date('2026-04-24T18:00:00+08:00');
+
+  assert.deepEqual(getFocusRecordsForPeriod(mixedRecords, 'day', now).map((record) => record.id), ['morning', 'midday']);
+  assert.deepEqual(getFocusRecordsForPeriod(mixedRecords, 'week', now).map((record) => record.id), [
+    'morning',
+    'midday',
+    'yesterday',
+    'next-day',
+  ]);
+  assert.deepEqual(getFocusRecordsForPeriod(mixedRecords, 'month', now).map((record) => record.id), [
+    'morning',
+    'midday',
+    'yesterday',
+    'next-day',
+  ]);
 });

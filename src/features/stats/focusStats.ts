@@ -19,6 +19,8 @@ export interface FocusStats {
   totalDistribution: FocusCategoryDistribution[];
 }
 
+export type FocusStatsPeriod = 'day' | 'week' | 'month';
+
 /**
  * Builds all focus statistics shown by the stats page from persisted records.
  *
@@ -39,6 +41,24 @@ export function buildFocusStats(records: FocusRecord[], now = new Date()): Focus
     todayDistribution: buildCategoryDistribution(todayRecords),
     totalDistribution: buildCategoryDistribution(records),
   };
+}
+
+/**
+ * Filters focus records for a visible stats period.
+ *
+ * @param records persisted focus records
+ * @param period selected stats period
+ * @param now date used as the period anchor
+ * @returns records inside the selected local period
+ */
+export function getFocusRecordsForPeriod(records: FocusRecord[], period: FocusStatsPeriod, now = new Date()): FocusRecord[] {
+  const start = getPeriodStart(period, now);
+  const end = getPeriodEnd(period, now);
+
+  return records.filter((record) => {
+    const timestamp = new Date(record.timestamp);
+    return timestamp >= start && timestamp < end;
+  });
 }
 
 /**
@@ -89,4 +109,33 @@ function toDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getPeriodStart(period: FocusStatsPeriod, now: Date): Date {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (period === 'week') {
+    const mondayOffset = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - mondayOffset);
+  }
+
+  if (period === 'month') {
+    start.setDate(1);
+  }
+
+  return start;
+}
+
+function getPeriodEnd(period: FocusStatsPeriod, now: Date): Date {
+  const end = getPeriodStart(period, now);
+
+  if (period === 'day') {
+    end.setDate(end.getDate() + 1);
+  } else if (period === 'week') {
+    end.setDate(end.getDate() + 7);
+  } else {
+    end.setMonth(end.getMonth() + 1);
+  }
+
+  return end;
 }

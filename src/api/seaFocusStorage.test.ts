@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSeaFocusStorage } from './seaFocusStorage';
-import { FocusRecord, Task } from '../types';
+import { FocusRecord, JournalEntry, Task } from '../types';
 
 function createMemoryStorage() {
   const values = new Map<string, string>();
@@ -18,9 +18,10 @@ test('loads empty arrays when storage has no data', () => {
 
   assert.deepEqual(api.loadTasks(), []);
   assert.deepEqual(api.loadFocusRecords(), []);
+  assert.deepEqual(api.loadJournalEntries(), []);
 });
 
-test('saves and loads tasks and focus records through the frontend API layer', () => {
+test('saves and loads tasks, focus records, and journal entries through the frontend API layer', () => {
   const api = createSeaFocusStorage(createMemoryStorage());
   const tasks: Task[] = [
     {
@@ -40,20 +41,34 @@ test('saves and loads tasks and focus records through the frontend API layer', (
       timestamp: '2026-04-24T09:00:00.000Z',
     },
   ];
+  const entries: JournalEntry[] = [
+    {
+      id: 'entry-1',
+      date: '2026-04-24',
+      title: '整理灵感',
+      content: '记录今天的安排。',
+      createdAt: '2026-04-24T09:00:00.000Z',
+      updatedAt: '2026-04-24T09:00:00.000Z',
+    },
+  ];
 
   api.saveTasks(tasks);
   api.saveFocusRecords(records);
+  api.saveJournalEntries(entries);
 
   assert.deepEqual(api.loadTasks(), tasks);
   assert.deepEqual(api.loadFocusRecords(), records);
+  assert.deepEqual(api.loadJournalEntries(), entries);
 });
 
 test('falls back to empty arrays when stored JSON is invalid', () => {
   const storage = createMemoryStorage();
   storage.setItem('sea-focus-tasks', '{bad-json');
   storage.setItem('sea-focus-records', 'null');
+  storage.setItem('sea-focus-journal-entries', '{}');
   const api = createSeaFocusStorage(storage);
 
   assert.deepEqual(api.loadTasks(), []);
   assert.deepEqual(api.loadFocusRecords(), []);
+  assert.deepEqual(api.loadJournalEntries(), []);
 });

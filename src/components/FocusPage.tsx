@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Music } from 'lucide-react';
+import { Play, Pause, RotateCcw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { FocusRecord } from '../types';
@@ -220,11 +220,7 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
           onClick={toggleTimer}
           className="w-24 h-24 rounded-full bg-nature-primary text-white flex items-center justify-center shadow-lg shadow-nature-primary/20 active:scale-95 transition-transform"
         >
-          {isActive ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
-        </button>
-
-        <button className="w-16 h-16 rounded-full border border-nature-border flex items-center justify-center opacity-60 hover:bg-neutral-100 transition-colors">
-            <Music className="w-6 h-6" />
+            {isActive ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
         </button>
       </div>
 

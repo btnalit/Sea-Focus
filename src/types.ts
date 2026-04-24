@@ -8,6 +8,15 @@ export interface Task {
   date: string;
 }
 
+export interface JournalEntry {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FocusRecord {
   id: string;
   type: 'pomodoro' | 'stopwatch' | 'countdown';
@@ -16,4 +25,4 @@ export interface FocusRecord {
   timestamp: string;
 }
 
-export type AppTab = 'plan' | 'view' | 'focus' | 'stats' | 'mine';
+export type AppTab = 'plan' | 'view' | 'focus' | 'stats';

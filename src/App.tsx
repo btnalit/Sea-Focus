@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AppTab, Task, FocusRecord } from './types';
+import { AppTab, Task, FocusRecord, JournalEntry } from './types';
 import { BottomNav } from './components/BottomNav';
 import { FocusPage } from './components/FocusPage';
 import { PlanPage } from './components/PlanPage';
@@ -12,11 +12,14 @@ import { StatsPage } from './components/StatsPage';
 import { CalendarPage } from './components/CalendarPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
+import { buildFocusStats } from './features/stats/focusStats';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('focus');
   const [tasks, setTasks] = useState<Task[]>(() => seaFocusStorage.loadTasks());
   const [records, setRecords] = useState<FocusRecord[]>(() => seaFocusStorage.loadFocusRecords());
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => seaFocusStorage.loadJournalEntries());
+  const todayPomodoros = buildFocusStats(records).todayPomodoros;
 
   // Sync data to localStorage
   useEffect(() => {
@@ -27,12 +30,15 @@ export default function App() {
     seaFocusStorage.saveFocusRecords(records);
   }, [records]);
 
-  const addTask = (task: Omit<Task, 'id' | 'completed' | 'date'>) => {
+  useEffect(() => {
+    seaFocusStorage.saveJournalEntries(journalEntries);
+  }, [journalEntries]);
+
+  const addTask = (task: Omit<Task, 'id' | 'completed'>) => {
     const newTask: Task = {
       ...task,
       id: Math.random().toString(36).substr(2, 9),
       completed: false,
-      date: new Date().toISOString(),
     };
     setTasks([newTask, ...tasks]);
   };
@@ -48,6 +54,27 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
     setRecords([newRecord, ...records]);
+  };
+
+  const addJournalEntry = (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const newEntry: JournalEntry = {
+      ...entry,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: now,
+      updatedAt: now,
+    };
+    setJournalEntries([newEntry, ...journalEntries]);
+  };
+
+  const updateJournalEntry = (id: string, updates: Pick<JournalEntry, 'title' | 'content'>) => {
+    setJournalEntries(journalEntries.map((entry) => (
+      entry.id === id ? { ...entry, ...updates, updatedAt: new Date().toISOString() } : entry
+    )));
+  };
+
+  const deleteJournalEntry = (id: string) => {
+    setJournalEntries(journalEntries.filter((entry) => entry.id !== id));
   };
 
   return (
@@ -88,29 +115,24 @@ export default function App() {
             transition={{ duration: 0.3 }}
             className="h-full"
           >
-            {activeTab === 'plan' && <PlanPage tasks={tasks} onAddTask={addTask} onToggleTask={toggleTask} />}
-            {activeTab === 'view' && <CalendarPage />}
+            {activeTab === 'plan' && (
+              <PlanPage
+                tasks={tasks}
+                todayPomodoros={todayPomodoros}
+                onAddTask={addTask}
+                onToggleTask={toggleTask}
+              />
+            )}
+            {activeTab === 'view' && (
+              <CalendarPage
+                entries={journalEntries}
+                onAddEntry={addJournalEntry}
+                onUpdateEntry={updateJournalEntry}
+                onDeleteEntry={deleteJournalEntry}
+              />
+            )}
             {activeTab === 'focus' && <FocusPage onFocusComplete={addFocusRecord} />}
             {activeTab === 'stats' && <StatsPage records={records} />}
-            {activeTab === 'mine' && (
-              <div className="flex flex-col items-center justify-center h-full font-sans p-12">
-                <div className="w-24 h-24 bg-white rounded-[32px] border border-nature-border flex items-center justify-center p-1 mb-4 shadow-sm">
-                  <div className="w-full h-full bg-[#e9e8e0] rounded-[28px]" />
-                </div>
-                <h2 className="text-2xl italic-serif italic mb-2 text-nature-text">自然探索者</h2>
-                <p className="opacity-60 mb-8 italic-serif italic text-sm">"深入自然，静待专注之花绽放"</p>
-                <div className="w-full space-y-4">
-                   <div className="bg-white border border-nature-border p-4 rounded-2xl flex justify-between shadow-sm">
-                      <span className="font-medium text-sm">成就勋章</span>
-                      <span className="text-nature-primary font-bold">12 枚</span>
-                   </div>
-                   <div className="bg-white border border-nature-border p-4 rounded-2xl flex justify-between shadow-sm">
-                      <span className="font-medium text-sm">今日目标</span>
-                      <span className="text-nature-secondary font-bold">6/8 番茄</span>
-                   </div>
-                </div>
-              </div>
-            )}
           </motion.div>
         </AnimatePresence>
       </main>

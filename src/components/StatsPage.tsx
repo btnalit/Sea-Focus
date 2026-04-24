@@ -1,15 +1,24 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { FocusRecord } from '../types';
-import { buildFocusStats, formatDuration } from '../features/stats/focusStats';
+import {
+  buildFocusStats,
+  FocusStatsPeriod,
+  formatDuration,
+  getFocusRecordsForPeriod,
+} from '../features/stats/focusStats';
+import { cn } from '../lib/utils';
 
 interface StatsPageProps {
   records: FocusRecord[];
 }
 
 export const StatsPage: React.FC<StatsPageProps> = ({ records }) => {
+  const [period, setPeriod] = React.useState<FocusStatsPeriod>('day');
   const stats = buildFocusStats(records);
-  const chartData = stats.todayDistribution;
+  const periodRecords = getFocusRecordsForPeriod(records, period);
+  const periodStats = buildFocusStats(periodRecords);
+  const chartData = periodStats.totalDistribution;
 
   return (
     <div className="p-6 pb-28 font-sans text-nature-text overflow-y-auto h-full">
@@ -62,9 +71,18 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records }) => {
         <div className="flex justify-between items-center mb-8">
             <h3 className="italic-serif text-xl italic text-nature-text">分布图鉴</h3>
             <div className="flex space-x-1 text-[10px] bg-nature-bg p-1 rounded-full border border-nature-border font-bold tracking-widest">
-                <span className="bg-nature-primary text-white px-2 py-0.5 rounded-full">日</span>
-                <span className="px-2 py-0.5 opacity-40">周</span>
-                <span className="px-2 py-0.5 opacity-40">月</span>
+                {(['day', 'week', 'month'] as const).map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setPeriod(item)}
+                    className={cn(
+                      'px-2 py-0.5 rounded-full',
+                      period === item ? 'bg-nature-primary text-white' : 'opacity-40',
+                    )}
+                  >
+                    {item === 'day' ? '日' : item === 'week' ? '周' : '月'}
+                  </button>
+                ))}
             </div>
         </div>
 
@@ -89,8 +107,8 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records }) => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-[10px] font-bold tracking-widest opacity-40">今日专注</div>
-                <div className="text-2xl font-serif font-light leading-none">{formatDuration(stats.todaySeconds)}</div>
+                <div className="text-[10px] font-bold tracking-widest opacity-40">{period === 'day' ? '今日专注' : period === 'week' ? '本周专注' : '本月专注'}</div>
+                <div className="text-2xl font-serif font-light leading-none">{formatDuration(periodStats.totalSeconds)}</div>
               </div>
             </>
           ) : (
@@ -102,7 +120,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records }) => {
         </div>
 
         <div className="grid grid-cols-2 gap-4 mt-8 px-2">
-            {(chartData.length > 0 ? chartData : stats.totalDistribution).slice(0, 4).map(d => (
+            {chartData.slice(0, 4).map(d => (
               <div key={d.name} className="flex items-center space-x-3">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
                 <div className="flex flex-col">
@@ -111,7 +129,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records }) => {
                 </div>
               </div>
             ))}
-            {chartData.length === 0 && stats.totalDistribution.length === 0 && (
+            {chartData.length === 0 && (
               <div className="col-span-2 text-center text-[10px] opacity-30 italic-serif italic">暂无真实专注数据</div>
             )}
         </div>

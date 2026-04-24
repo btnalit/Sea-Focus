@@ -1,7 +1,8 @@
-import { FocusRecord, Task } from '../types';
+import { FocusRecord, JournalEntry, Task } from '../types';
 
 const TASKS_KEY = 'sea-focus-tasks';
 const RECORDS_KEY = 'sea-focus-records';
+const JOURNAL_ENTRIES_KEY = 'sea-focus-journal-entries';
 
 type SeaFocusStorageBackend = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -10,6 +11,8 @@ export interface SeaFocusStorageApi {
   saveTasks: (tasks: Task[]) => void;
   loadFocusRecords: () => FocusRecord[];
   saveFocusRecords: (records: FocusRecord[]) => void;
+  loadJournalEntries: () => JournalEntry[];
+  saveJournalEntries: (entries: JournalEntry[]) => void;
 }
 
 /**
@@ -24,6 +27,8 @@ export function createSeaFocusStorage(backend: SeaFocusStorageBackend): SeaFocus
     saveTasks: (tasks) => backend.setItem(TASKS_KEY, JSON.stringify(tasks)),
     loadFocusRecords: () => readArray<FocusRecord>(backend, RECORDS_KEY),
     saveFocusRecords: (records) => backend.setItem(RECORDS_KEY, JSON.stringify(records)),
+    loadJournalEntries: () => readArray<JournalEntry>(backend, JOURNAL_ENTRIES_KEY),
+    saveJournalEntries: (entries) => backend.setItem(JOURNAL_ENTRIES_KEY, JSON.stringify(entries)),
   };
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Calendar, Timer, BarChart3, User } from 'lucide-react';
+import { Star, Calendar, Timer, BarChart3 } from 'lucide-react';
 import { AppTab } from '../types';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -15,7 +15,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     { id: 'view', label: '随笔', icon: Calendar },
     { id: 'focus', label: '专注', icon: Timer },
     { id: 'stats', label: '收获', icon: BarChart3 },
-    { id: 'mine', label: '我的', icon: User },
   ] as const;
 
   return (
