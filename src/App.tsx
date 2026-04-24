@@ -13,6 +13,7 @@ import { CalendarPage } from './components/CalendarPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
 import { buildFocusStats } from './features/stats/focusStats';
+import { toggleTaskCompletion } from './features/plan/taskLifecycle';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('focus');
@@ -34,7 +35,7 @@ export default function App() {
     seaFocusStorage.saveJournalEntries(journalEntries);
   }, [journalEntries]);
 
-  const addTask = (task: Omit<Task, 'id' | 'completed'>) => {
+  const addTask = (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => {
     const newTask: Task = {
       ...task,
       id: Math.random().toString(36).substr(2, 9),
@@ -44,7 +45,7 @@ export default function App() {
   };
 
   const toggleTask = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+    setTasks(tasks.map(t => t.id === id ? toggleTaskCompletion(t) : t));
   };
 
   const addFocusRecord = (record: Omit<FocusRecord, 'id' | 'timestamp'>) => {

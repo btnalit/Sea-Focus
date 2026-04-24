@@ -8,11 +8,16 @@ import {
   getChineseWeekday,
 } from '../features/calendar/dateUtils';
 import { DailyHarvestTheme, getDailyHarvestTheme } from '../features/plan/dailyHarvestTheme';
+import {
+  getTasksForPlanDate,
+  isTaskCarriedForward,
+  normalizeTaskDateKey,
+} from '../features/plan/taskLifecycle';
 
 interface PlanPageProps {
   tasks: Task[];
   todayPomodoros: number;
-  onAddTask: (task: Omit<Task, 'id' | 'completed'>) => void;
+  onAddTask: (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => void;
   onToggleTask: (id: string) => void;
 }
 
@@ -39,8 +44,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
   const dateStripRef = useRef<HTMLDivElement | null>(null);
   const selectedDateRef = useRef<HTMLButtonElement | null>(null);
   const shouldCenterSelectedDate = useRef(false);
-  const selectedDateTasks = tasks.filter((task) => normalizeTaskDateKey(task.date) === selectedDateKey);
-  const visibleTasks = selectedDateTasks.filter((task) => viewMode === 'archive' ? task.completed : !task.completed);
+  const visibleTasks = getTasksForPlanDate(tasks, selectedDateKey, viewMode);
 
   useLayoutEffect(() => {
     const strip = dateStripRef.current;
@@ -142,7 +146,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
           {dateStrip.map((date) => {
             const dateKey = formatDateKey(date);
             const isSelected = dateKey === selectedDateKey;
-            const dayTaskCount = tasks.filter((task) => normalizeTaskDateKey(task.date) === dateKey && !task.completed).length;
+            const dayTaskCount = getTasksForPlanDate(tasks, dateKey, 'active').length;
 
             return (
               <button
@@ -209,7 +213,19 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
                       )}>
                         {task.completed && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
                       </span>
-                      <span className={cn(task.completed && 'line-through')}>{task.title}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className={cn('block', task.completed && 'line-through')}>{task.title}</span>
+                        {isTaskCarriedForward(task, selectedDateKey) && (
+                          <span className="mt-1 inline-flex rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-bold tracking-widest opacity-45">
+                            追踪 {normalizeTaskDateKey(task.date).slice(5)}
+                          </span>
+                        )}
+                        {viewMode === 'archive' && task.completedAt && (
+                          <span className="mt-1 inline-flex rounded-full bg-white/70 px-1.5 py-0.5 text-[8px] font-bold tracking-widest opacity-45">
+                            完成 {task.completedAt.slice(5)}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   ))}
                   {quadrantTasks.length === 0 && (
@@ -277,11 +293,6 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
     </div>
   );
 };
-
-function normalizeTaskDateKey(date: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-  return formatDateKey(new Date(date));
-}
 
 function DailyHarvestIllustration({ theme }: { theme: DailyHarvestTheme }) {
   return (

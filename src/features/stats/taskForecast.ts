@@ -1,6 +1,6 @@
 import { Task, TaskQuadrant } from '../../types';
 import { FocusStatsPeriod } from './focusStats';
-import { formatDateKey } from '../calendar/dateUtils';
+import { normalizeTaskDateKey } from '../plan/taskLifecycle';
 
 const POMODORO_SECONDS = 25 * 60;
 
@@ -74,17 +74,17 @@ function getTasksForPeriod(tasks: Task[], period: FocusStatsPeriod, now: Date): 
 
   return tasks.filter((task) => {
     const taskDate = parseTaskDate(task.date);
+    if (!task.completed) {
+      return taskDate < end;
+    }
+
     return taskDate >= start && taskDate < end;
   });
 }
 
 function parseTaskDate(date: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const [year, month, day] = date.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-
-  return new Date(formatDateKey(new Date(date)));
+  const [year, month, day] = normalizeTaskDateKey(date).split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function getPeriodStart(period: FocusStatsPeriod, now: Date): Date {

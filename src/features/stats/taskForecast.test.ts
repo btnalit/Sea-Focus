@@ -69,3 +69,19 @@ test('builds week and month forecasts from dated tasks', () => {
 
   assert.equal(buildTaskForecast(tasks, 'month', now).totalTasks, 3);
 });
+
+test('includes unfinished carryover tasks in the current day forecast', () => {
+  const forecast = buildTaskForecast(tasks, 'day', new Date('2026-04-25T09:00:00+08:00'));
+
+  assert.equal(forecast.totalTasks, 2);
+  assert.equal(forecast.activeTasks, 2);
+  assert.equal(forecast.completedTasks, 0);
+  assert.equal(forecast.estimatedPomodoros, 4);
+  assert.deepEqual(
+    forecast.distribution.map(({ id, activeTaskCount, estimatedPomodoros }) => ({ id, activeTaskCount, estimatedPomodoros })),
+    [
+      { id: 'urgent-important', activeTaskCount: 1, estimatedPomodoros: 2 },
+      { id: 'not-urgent-important', activeTaskCount: 1, estimatedPomodoros: 2 },
+    ],
+  );
+});

@@ -5,6 +5,7 @@ export interface Task {
   title: string;
   quadrant: TaskQuadrant;
   completed: boolean;
+  completedAt?: string;
   date: string;
 }
 
