@@ -15,4 +15,4 @@ Date: 2026-04-24
 - [x] Add reminder controls to `CalendarPage`.
 - [x] Update audit with verification evidence.
 - [x] Run automated verification.
-- [ ] Commit and push.
+- [x] Commit and push.

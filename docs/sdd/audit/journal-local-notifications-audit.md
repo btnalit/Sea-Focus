@@ -34,3 +34,4 @@ Date: 2026-04-24
 - Android resource XML parse scan: passed, 12 XML files.
 - `git diff --check`: passed.
 - Permission scan confirms `POST_NOTIFICATIONS` is declared and `SCHEDULE_EXACT_ALARM` is not present in the app manifest.
+- Commit: `3e16ac9 feat: add journal reminders`.
