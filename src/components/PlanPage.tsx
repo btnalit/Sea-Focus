@@ -19,6 +19,7 @@ interface PlanPageProps {
   todayArchivedTasks: number;
   onAddTask: (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => void;
   onToggleTask: (id: string) => void;
+  onDeleteTask: (id: string) => void;
 }
 
 const quadrants: { id: TaskQuadrant; label: string; color: string; textColor: string; checkBoxBorder: string; checkBoxActive: string }[] = [
@@ -32,12 +33,19 @@ let persistedSelectedDateKey: string | null = null;
 let persistedDateStripScrollLeft: number | null = null;
 let hasCenteredInitialPlanDate = false;
 
-export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, onAddTask, onToggleTask }) => {
+export const PlanPage: React.FC<PlanPageProps> = ({
+  tasks,
+  todayArchivedTasks,
+  onAddTask,
+  onToggleTask,
+  onDeleteTask,
+}) => {
   const todayKey = formatDateKey(new Date());
   const harvestTheme = useMemo(() => getDailyHarvestTheme(new Date()), [todayKey]);
   const [selectedDateKey, setSelectedDateKeyState] = useState(() => persistedSelectedDateKey ?? todayKey);
   const [viewMode, setViewMode] = useState<'active' | 'archive'>('active');
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedArchiveTaskId, setSelectedArchiveTaskId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [targetQuadrant, setTargetQuadrant] = useState<TaskQuadrant>('urgent-important');
   const dateStrip = useMemo(() => buildDateRangeAround(new Date(), 45, 45), []);
@@ -45,6 +53,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, o
   const selectedDateRef = useRef<HTMLButtonElement | null>(null);
   const shouldCenterSelectedDate = useRef(false);
   const visibleTasks = getTasksForPlanDate(tasks, selectedDateKey, viewMode);
+  const selectedArchiveTask = tasks.find((task) => task.id === selectedArchiveTaskId) ?? null;
 
   useLayoutEffect(() => {
     const strip = dateStripRef.current;
@@ -94,6 +103,28 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, o
     setNewTaskTitle('');
     setIsAdding(false);
     setViewMode('active');
+  };
+
+  const handleTaskClick = (task: Task) => {
+    if (viewMode === 'archive') {
+      setSelectedArchiveTaskId(task.id);
+      return;
+    }
+
+    onToggleTask(task.id);
+  };
+
+  const restoreArchiveTask = () => {
+    if (!selectedArchiveTask) return;
+    onToggleTask(selectedArchiveTask.id);
+    setSelectedArchiveTaskId(null);
+    setViewMode('active');
+  };
+
+  const deleteArchiveTask = () => {
+    if (!selectedArchiveTask) return;
+    onDeleteTask(selectedArchiveTask.id);
+    setSelectedArchiveTaskId(null);
   };
 
   return (
@@ -200,7 +231,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, o
                   {quadrantTasks.map((task) => (
                     <button
                       key={task.id}
-                      onClick={() => onToggleTask(task.id)}
+                      onClick={() => handleTaskClick(task)}
                       className={cn(
                         'w-full flex items-start gap-2 text-left text-xs transition-all group',
                         task.completed ? 'opacity-40' : 'opacity-100',
@@ -287,6 +318,46 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, o
             >
               确认播种
             </button>
+          </motion.div>
+        </div>
+      )}
+
+      {selectedArchiveTask && (
+        <div className="fixed inset-0 bg-[#4a4a3544] backdrop-blur-sm z-[100] flex items-center justify-center p-8">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-nature-bg border border-nature-border rounded-[36px] w-full max-w-sm p-7 shadow-2xl"
+          >
+            <div className="mb-6">
+              <div className="text-[10px] font-bold tracking-widest opacity-40 mb-2">归档计划</div>
+              <h3 className="italic-serif text-2xl italic leading-tight mb-2">{selectedArchiveTask.title}</h3>
+              <div className="text-[10px] font-bold tracking-widest opacity-40">
+                原计划 {normalizeTaskDateKey(selectedArchiveTask.date)}
+                {selectedArchiveTask.completedAt ? ` · 完成 ${selectedArchiveTask.completedAt}` : ''}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <button
+                onClick={restoreArchiveTask}
+                className="w-full py-4 bg-nature-primary text-white rounded-3xl font-bold tracking-widest text-sm shadow-lg shadow-nature-primary/20"
+              >
+                恢复计划
+              </button>
+              <button
+                onClick={deleteArchiveTask}
+                className="w-full py-4 bg-white border border-nature-secondary text-nature-secondary rounded-3xl font-bold tracking-widest text-sm"
+              >
+                删除归档
+              </button>
+              <button
+                onClick={() => setSelectedArchiveTaskId(null)}
+                className="w-full py-3 text-[10px] font-bold tracking-widest opacity-40"
+              >
+                取消
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

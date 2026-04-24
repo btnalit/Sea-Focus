@@ -24,6 +24,17 @@ export function toggleTaskCompletion(task: Task, now = new Date()): Task {
 }
 
 /**
+ * Removes a task from the persisted task list.
+ *
+ * @param tasks all persisted tasks
+ * @param id task id to delete
+ * @returns task list without the deleted task
+ */
+export function deleteTaskById(tasks: Task[], id: string): Task[] {
+  return tasks.filter((task) => task.id !== id);
+}
+
+/**
  * Returns tasks visible for a plan date and mode.
  *
  * @param tasks all persisted tasks

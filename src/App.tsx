@@ -12,7 +12,7 @@ import { StatsPage } from './components/StatsPage';
 import { CalendarPage } from './components/CalendarPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
-import { toggleTaskCompletion } from './features/plan/taskLifecycle';
+import { deleteTaskById, toggleTaskCompletion } from './features/plan/taskLifecycle';
 import { buildPlanHeaderStats } from './features/plan/planHeaderStats';
 
 export default function App() {
@@ -46,6 +46,10 @@ export default function App() {
 
   const toggleTask = (id: string) => {
     setTasks(tasks.map(t => t.id === id ? toggleTaskCompletion(t) : t));
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks(deleteTaskById(tasks, id));
   };
 
   const addFocusRecord = (record: Omit<FocusRecord, 'id' | 'timestamp'>) => {
@@ -122,6 +126,7 @@ export default function App() {
                 todayArchivedTasks={planHeaderStats.todayArchivedTasks}
                 onAddTask={addTask}
                 onToggleTask={toggleTask}
+                onDeleteTask={deleteTask}
               />
             )}
             {activeTab === 'view' && (

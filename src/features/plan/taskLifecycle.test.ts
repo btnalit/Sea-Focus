@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  deleteTaskById,
   getTasksForPlanDate,
   isTaskCarriedForward,
   toggleTaskCompletion,
@@ -62,4 +63,11 @@ test('stamps completion date when archiving and clears it when reopening', () =>
 
   assert.equal(reopened.completed, false);
   assert.equal(reopened.completedAt, undefined);
+});
+
+test('deletes an archived task from the persisted task list', () => {
+  assert.deepEqual(deleteTaskById(tasks, 'done-from-24').map((task) => task.id), [
+    'open-from-24',
+    'today',
+  ]);
 });
