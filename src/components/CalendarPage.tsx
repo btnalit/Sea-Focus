@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { cn } from '../lib/utils';
@@ -87,6 +88,111 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     setModalMode('list');
   };
 
+  const dayModal = (
+    <div className="fixed inset-0 z-[100] bg-[#4a4a3544] backdrop-blur-sm flex items-center justify-center px-5 py-8">
+      <div className="w-full max-w-sm max-h-[calc(100dvh-5rem)] overflow-y-auto bg-nature-bg border border-nature-border rounded-[36px] p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-[10px] font-bold tracking-widest opacity-40">随笔管理</div>
+            <h2 className="italic-serif text-xl italic mt-1">
+              {selectedDateKey} 周{getChineseWeekday(parseDateKey(selectedDateKey))}
+            </h2>
+          </div>
+          <button
+            onClick={() => setIsDayModalOpen(false)}
+            className="w-10 h-10 rounded-2xl border border-nature-border bg-white flex items-center justify-center opacity-70"
+            aria-label="关闭随笔弹窗"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {modalMode === 'list' ? (
+          <>
+            <div className="space-y-3 mb-5">
+              {selectedEntries.map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => startEdit(entry)}
+                  className="w-full rounded-3xl bg-white border border-nature-border p-4 text-left"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <h3 className="font-bold text-sm">{entry.title}</h3>
+                    <span className="opacity-40">
+                      <Pencil className="w-4 h-4" />
+                    </span>
+                  </div>
+                  <p className="text-xs leading-5 opacity-60 line-clamp-3 whitespace-pre-wrap">{entry.content || '没有正文。'}</p>
+                </button>
+              ))}
+              {selectedEntries.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-nature-border p-6 text-center text-xs italic-serif italic opacity-40">
+                  这一天还没有随笔，写下一粒种子。
+                </div>
+              )}
+            </div>
+            <button
+              onClick={resetForm}
+              className="w-full py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              添加随笔
+            </button>
+          </>
+        ) : (
+          <div className="rounded-3xl border border-nature-border bg-white p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[10px] font-bold tracking-widest opacity-40">
+                {editingId ? '编辑随笔' : '新增随笔'}
+              </div>
+              {editingId && (
+                <button
+                  onClick={() => {
+                    onDeleteEntry(editingId);
+                    setModalMode('list');
+                    setEditingId(null);
+                    setTitle('');
+                    setContent('');
+                  }}
+                  className="text-nature-secondary opacity-80"
+                  aria-label="删除随笔"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="标题"
+              className="w-full bg-transparent border-b border-nature-border py-2 mb-3 outline-none text-sm font-bold"
+            />
+            <textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder="记录今天的想法、安排或复盘..."
+              className="w-full min-h-36 bg-transparent outline-none text-sm leading-6 resize-none"
+            />
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button
+                onClick={() => setModalMode('list')}
+                className="py-3 rounded-2xl border border-nature-border bg-white text-xs font-bold tracking-widest opacity-60"
+              >
+                返回列表
+              </button>
+              <button
+                onClick={saveEntry}
+                className="py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest"
+              >
+                {editingId ? '保存修改' : '保存随笔'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-6 pb-28 font-sans overflow-y-auto h-full text-nature-text">
       <div className="flex items-center justify-between mb-8">
@@ -162,110 +268,7 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
         </div>
       </div>
 
-      {isDayModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-[#4a4a3544] backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-sm max-h-[82vh] overflow-y-auto bg-nature-bg border border-nature-border rounded-[36px] p-5 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-[10px] font-bold tracking-widest opacity-40">随笔管理</div>
-                <h2 className="italic-serif text-xl italic mt-1">
-                  {selectedDateKey} 周{getChineseWeekday(parseDateKey(selectedDateKey))}
-                </h2>
-              </div>
-              <button
-                onClick={() => setIsDayModalOpen(false)}
-                className="w-10 h-10 rounded-2xl border border-nature-border bg-white flex items-center justify-center opacity-70"
-                aria-label="关闭随笔弹窗"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {modalMode === 'list' ? (
-              <>
-                <div className="space-y-3 mb-5">
-                  {selectedEntries.map((entry) => (
-                    <button
-                      key={entry.id}
-                      onClick={() => startEdit(entry)}
-                      className="w-full rounded-3xl bg-white border border-nature-border p-4 text-left"
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <h3 className="font-bold text-sm">{entry.title}</h3>
-                        <span className="opacity-40">
-                          <Pencil className="w-4 h-4" />
-                        </span>
-                      </div>
-                      <p className="text-xs leading-5 opacity-60 line-clamp-3 whitespace-pre-wrap">{entry.content || '没有正文。'}</p>
-                    </button>
-                  ))}
-                  {selectedEntries.length === 0 && (
-                    <div className="rounded-3xl border border-dashed border-nature-border p-6 text-center text-xs italic-serif italic opacity-40">
-                      这一天还没有随笔，写下一粒种子。
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={resetForm}
-                  className="w-full py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  添加随笔
-                </button>
-              </>
-            ) : (
-              <div className="rounded-3xl border border-nature-border bg-white p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-[10px] font-bold tracking-widest opacity-40">
-                    {editingId ? '编辑随笔' : '新增随笔'}
-                  </div>
-                  {editingId && (
-                    <button
-                      onClick={() => {
-                        onDeleteEntry(editingId);
-                        setModalMode('list');
-                        setEditingId(null);
-                        setTitle('');
-                        setContent('');
-                      }}
-                      className="text-nature-secondary opacity-80"
-                      aria-label="删除随笔"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="标题"
-                  className="w-full bg-transparent border-b border-nature-border py-2 mb-3 outline-none text-sm font-bold"
-                />
-                <textarea
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  placeholder="记录今天的想法、安排或复盘..."
-                  className="w-full min-h-36 bg-transparent outline-none text-sm leading-6 resize-none"
-                />
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  <button
-                    onClick={() => setModalMode('list')}
-                    className="py-3 rounded-2xl border border-nature-border bg-white text-xs font-bold tracking-widest opacity-60"
-                  >
-                    返回列表
-                  </button>
-                  <button
-                    onClick={saveEntry}
-                    className="py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest"
-                  >
-                    {editingId ? '保存修改' : '保存随笔'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {isDayModalOpen && (typeof document === 'undefined' ? dayModal : createPortal(dayModal, document.body))}
     </div>
   );
 };

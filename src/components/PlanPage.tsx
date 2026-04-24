@@ -22,27 +22,65 @@ const quadrants: { id: TaskQuadrant; label: string; color: string; textColor: st
   { id: 'not-urgent-not-important', label: '冥想/留白', color: 'bg-[#f5f7f9] border-[#e6ebef]', textColor: 'text-[#7a8e9e]', checkBoxBorder: 'border-[#7a8e9e]', checkBoxActive: 'bg-[#7a8e9e]' },
 ];
 
+let persistedSelectedDateKey: string | null = null;
+let persistedDateStripScrollLeft: number | null = null;
+let hasCenteredInitialPlanDate = false;
+
 export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAddTask, onToggleTask }) => {
   const todayKey = formatDateKey(new Date());
-  const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
+  const [selectedDateKey, setSelectedDateKeyState] = useState(() => persistedSelectedDateKey ?? todayKey);
   const [viewMode, setViewMode] = useState<'active' | 'archive'>('active');
   const [isAdding, setIsAdding] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [targetQuadrant, setTargetQuadrant] = useState<TaskQuadrant>('urgent-important');
   const dateStrip = useMemo(() => buildDateRangeAround(new Date(), 45, 45), []);
+  const dateStripRef = useRef<HTMLDivElement | null>(null);
   const selectedDateRef = useRef<HTMLButtonElement | null>(null);
-  const hasAlignedDateStrip = useRef(false);
+  const shouldCenterSelectedDate = useRef(false);
   const selectedDateTasks = tasks.filter((task) => normalizeTaskDateKey(task.date) === selectedDateKey);
   const visibleTasks = selectedDateTasks.filter((task) => viewMode === 'archive' ? task.completed : !task.completed);
 
   useLayoutEffect(() => {
-    selectedDateRef.current?.scrollIntoView({
-      behavior: hasAlignedDateStrip.current ? 'smooth' : 'auto',
-      inline: 'center',
-      block: 'nearest',
-    });
-    hasAlignedDateStrip.current = true;
+    const strip = dateStripRef.current;
+    const selectedDate = selectedDateRef.current;
+    if (!strip || !selectedDate) return;
+
+    if (persistedDateStripScrollLeft !== null) {
+      strip.scrollLeft = persistedDateStripScrollLeft;
+      return;
+    }
+
+    if (!hasCenteredInitialPlanDate) {
+      centerDateInStrip(strip, selectedDate, 'auto');
+      persistedDateStripScrollLeft = strip.scrollLeft;
+      hasCenteredInitialPlanDate = true;
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!shouldCenterSelectedDate.current) return;
+    const strip = dateStripRef.current;
+    const selectedDate = selectedDateRef.current;
+    if (strip && selectedDate) {
+      centerDateInStrip(strip, selectedDate, 'smooth');
+    }
+    shouldCenterSelectedDate.current = false;
   }, [selectedDateKey]);
+
+  const selectDate = (dateKey: string) => {
+    persistedSelectedDateKey = dateKey;
+    shouldCenterSelectedDate.current = true;
+    if (dateKey === selectedDateKey) {
+      const strip = dateStripRef.current;
+      const selectedDate = selectedDateRef.current;
+      if (strip && selectedDate) {
+        centerDateInStrip(strip, selectedDate, 'smooth');
+      }
+      shouldCenterSelectedDate.current = false;
+      return;
+    }
+    setSelectedDateKeyState(dateKey);
+  };
 
   const handleAdd = () => {
     if (!newTaskTitle.trim()) return;
@@ -81,7 +119,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
             <div className="text-xs italic-serif italic font-medium">{todayPomodoros} 番茄</div>
           </div>
           <button
-            onClick={() => setSelectedDateKey(todayKey)}
+            onClick={() => selectDate(todayKey)}
             className="w-10 h-10 rounded-full border border-nature-primary p-0.5"
             aria-label="回到今天"
           >
@@ -90,7 +128,13 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
         </div>
       </div>
 
-      <div className="mb-8 -mx-6 px-6 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide">
+      <div
+        ref={dateStripRef}
+        onScroll={(event) => {
+          persistedDateStripScrollLeft = event.currentTarget.scrollLeft;
+        }}
+        className="mb-8 -mx-6 px-6 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+      >
         <div className="flex gap-3 w-max py-1">
           {dateStrip.map((date) => {
             const dateKey = formatDateKey(date);
@@ -101,7 +145,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
               <button
                 key={dateKey}
                 ref={isSelected ? selectedDateRef : undefined}
-                onClick={() => setSelectedDateKey(dateKey)}
+                onClick={() => selectDate(dateKey)}
                 className={cn(
                   'snap-center flex flex-col items-center justify-center h-20 w-16 shrink-0 rounded-[28px] border transition-all duration-300',
                   isSelected ? 'bg-nature-primary text-white border-nature-primary shadow-lg shadow-nature-primary/20 scale-105' : 'bg-white border-nature-border opacity-70',
@@ -234,4 +278,9 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
 function normalizeTaskDateKey(date: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   return formatDateKey(new Date(date));
+}
+
+function centerDateInStrip(container: HTMLDivElement, selectedDate: HTMLButtonElement, behavior: ScrollBehavior) {
+  const left = selectedDate.offsetLeft - (container.clientWidth / 2) + (selectedDate.clientWidth / 2);
+  container.scrollTo({ left: Math.max(0, left), behavior });
 }

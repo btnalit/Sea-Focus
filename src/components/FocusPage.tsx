@@ -177,13 +177,6 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
       </div>
 
       <div className="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center mb-8">
-        <button
-          onClick={resetTimer}
-          className="absolute top-2 right-2 z-10 w-12 h-12 rounded-full border border-nature-border bg-white flex items-center justify-center opacity-60 hover:bg-neutral-100 transition-colors"
-          aria-label="重置计时"
-        >
-          <RotateCcw className="w-5 h-5" />
-        </button>
         <svg className="w-full h-full -rotate-90" viewBox="0 0 320 320">
           <circle
             cx="160"
@@ -208,7 +201,15 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
           />
         </svg>
         
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <button
+            onClick={resetTimer}
+            className="mb-5 h-9 px-4 rounded-full border border-nature-border bg-white/90 flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-widest text-nature-primary shadow-sm opacity-80 active:scale-95 transition-transform"
+            aria-label="重置计时"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            重置
+          </button>
           <span className="text-[72px] sm:text-[92px] font-serif font-light tracking-tighter leading-none text-nature-text">
             {formatTime(displaySeconds)}
           </span>

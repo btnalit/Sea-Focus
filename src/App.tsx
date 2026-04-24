@@ -105,7 +105,7 @@ export default function App() {
         ))}
       </div>
 
-      <main className="flex-1 overflow-y-auto relative z-10">
+      <main className="flex-1 overflow-y-auto relative">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

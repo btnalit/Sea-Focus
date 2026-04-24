@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Sprout } from 'lucide-react';
 import { FocusRecord, Task } from '../types';
 import {
   buildFocusStats,
@@ -8,6 +8,7 @@ import {
   getFocusRecordsForPeriod,
 } from '../features/stats/focusStats';
 import { buildTaskForecast } from '../features/stats/taskForecast';
+import { buildGardenChartSegments, GardenChartInput, GardenChartSegment } from '../features/stats/chartPresentation';
 import { cn } from '../lib/utils';
 
 interface StatsPageProps {
@@ -22,7 +23,20 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
   const periodRecords = getFocusRecordsForPeriod(records, period);
   const periodStats = buildFocusStats(periodRecords);
   const forecast = buildTaskForecast(tasks, period);
-  const chartData = mode === 'harvest' ? periodStats.totalDistribution : forecast.distribution;
+  const chartItems: GardenChartInput[] = mode === 'harvest'
+    ? periodStats.totalDistribution.map((item) => ({
+      name: item.name,
+      value: item.seconds,
+      color: item.color,
+      helper: `${item.percentage}% · ${formatDuration(item.seconds)}`,
+    }))
+    : forecast.distribution.map((item) => ({
+      name: item.name,
+      value: item.estimatedPomodoros,
+      color: item.color,
+      helper: `${item.activeTaskCount} 个待办 · ${item.estimatedPomodoros} 番茄`,
+    }));
+  const chartSegments = buildGardenChartSegments(chartItems);
 
   return (
     <div className="p-6 pb-28 font-sans text-nature-text overflow-y-auto h-full">
@@ -74,7 +88,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
         <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-white opacity-10 rounded-full" />
       </div>
 
-      <div className="bg-white border border-nature-border rounded-[40px] p-8 shadow-sm relative">
+      <div className="bg-white border border-nature-border rounded-[40px] p-6 shadow-sm relative">
         <div className="flex justify-between items-center mb-8">
           <h3 className="italic-serif text-xl italic text-nature-text">
             {mode === 'harvest' ? '分布图鉴' : '任务土壤'}
@@ -82,63 +96,12 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
           <PeriodControl period={period} onPeriodChange={setPeriod} />
         </div>
 
-        <div className="h-64 relative">
-          {chartData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    innerRadius={65}
-                    outerRadius={85}
-                    paddingAngle={4}
-                    dataKey={mode === 'harvest' ? 'seconds' : 'estimatedPomodoros'}
-                    stroke="none"
-                  >
-                    {chartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => mode === 'harvest' ? formatDuration(Number(value)) : `${value} 番茄`} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-[10px] font-bold tracking-widest opacity-40">{getPeriodLabel(period)}{mode === 'harvest' ? '专注' : '预估'}</div>
-                <div className="text-2xl font-serif font-light leading-none">
-                  {mode === 'harvest' ? formatDuration(periodStats.totalSeconds) : `${forecast.estimatedPomodoros} 番茄`}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-[32px] border border-dashed border-nature-border bg-nature-bg/40">
-              <div className="text-[10px] font-bold tracking-widest opacity-40 mb-2">暂无分布</div>
-              <div className="text-sm italic-serif italic opacity-50">
-                {mode === 'harvest' ? '完成一次专注后生成图鉴' : '添加计划后生成预估'}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mt-8 px-2">
-          {chartData.slice(0, 4).map((d) => (
-            <div key={d.name} className="flex items-center space-x-3">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.color }} />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold tracking-tight opacity-100">{d.name}</span>
-                <span className="text-[10px] opacity-40 italic-serif italic">
-                  {mode === 'harvest'
-                    ? `占比 ${'percentage' in d ? d.percentage : 0}%`
-                    : `${'activeTaskCount' in d ? d.activeTaskCount : 0} 个待办`}
-                </span>
-              </div>
-            </div>
-          ))}
-          {chartData.length === 0 && (
-            <div className="col-span-2 text-center text-[10px] opacity-30 italic-serif italic">
-              {mode === 'harvest' ? '暂无真实专注数据' : '暂无计划预估数据'}
-            </div>
-          )}
-        </div>
+        <GardenChart
+          emptyText={mode === 'harvest' ? '完成一次专注后生成图鉴' : '添加计划后生成预估'}
+          label={`${getPeriodLabel(period)}${mode === 'harvest' ? '专注' : '预估'}`}
+          segments={chartSegments}
+          value={mode === 'harvest' ? formatDuration(periodStats.totalSeconds) : `${forecast.estimatedPomodoros} 番茄`}
+        />
       </div>
     </div>
   );
@@ -225,4 +188,86 @@ function getPeriodLabel(period: FocusStatsPeriod): string {
   if (period === 'day') return '今日';
   if (period === 'week') return '本周';
   return '本月';
+}
+
+function GardenChart({
+  emptyText,
+  label,
+  segments,
+  value,
+}: {
+  emptyText: string;
+  label: string;
+  segments: GardenChartSegment[];
+  value: string;
+}) {
+  const radius = 84;
+  const circumference = 2 * Math.PI * radius;
+  const totalValue = segments.reduce((sum, item) => sum + item.value, 0);
+
+  if (segments.length === 0) {
+    return (
+      <div className="h-72 flex flex-col items-center justify-center rounded-[34px] border border-dashed border-nature-border bg-nature-bg/40 text-center">
+        <Sprout className="w-8 h-8 text-nature-primary opacity-35 mb-3" />
+        <div className="text-[10px] font-bold tracking-widest opacity-40 mb-2">暂无分布</div>
+        <div className="text-sm italic-serif italic opacity-50">{emptyText}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="relative h-72 rounded-[34px] border border-nature-border bg-[#fbfaf4] overflow-hidden">
+        <div className="absolute inset-x-8 top-8 h-px bg-nature-border/70" />
+        <div className="absolute inset-x-8 bottom-8 h-px bg-nature-border/70" />
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 240 240" role="img" aria-label={`${label}图表`}>
+          <circle cx="120" cy="120" r={radius} fill="none" stroke="#eeeade" strokeWidth="18" />
+          {segments.map((segment) => (
+            <circle
+              key={segment.name}
+              cx="120"
+              cy="120"
+              r={radius}
+              fill="none"
+              stroke={segment.color}
+              strokeWidth="18"
+              strokeDasharray={`${Math.max(0, (segment.value / totalValue) * circumference - 8)} ${circumference}`}
+              strokeDashoffset={-(segment.offset * circumference)}
+              strokeLinecap="round"
+              transform="rotate(-90 120 120)"
+            />
+          ))}
+          <circle cx="120" cy="120" r="56" fill="#fdfcf8" stroke="#e9e8e0" strokeWidth="1" />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+          <div className="w-10 h-10 rounded-full bg-white border border-nature-border flex items-center justify-center mb-3 shadow-sm">
+            <Sprout className="w-5 h-5 text-nature-primary" />
+          </div>
+          <div className="text-[10px] font-bold tracking-widest opacity-40 mb-1">{label}</div>
+          <div className="font-serif text-3xl font-light leading-none">{value}</div>
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {segments.map((segment) => (
+          <div key={segment.name} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: segment.color }} />
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-xs font-bold truncate">{segment.name}</span>
+                <span className="text-[10px] opacity-40 shrink-0">{segment.helper}</span>
+              </div>
+              <div className="h-2 rounded-full bg-nature-bg overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${segment.percentage}%`, backgroundColor: segment.color }}
+                />
+              </div>
+            </div>
+            <div className="text-xs font-serif opacity-60 w-10 text-right">{segment.percentage}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
