@@ -142,13 +142,13 @@ if (existsSync(workflowPath)) {
   const workflow = YAML.parse(readProjectFile(workflowRelativePath))
   const triggers = workflow?.on ?? {}
   const jobs = workflow?.jobs ?? {}
-  const androidJob = jobs['android-debug-apk']
+  const androidJob = jobs['android-release-apk']
   const steps = Array.isArray(androidJob?.steps) ? androidJob.steps : []
 
   check(hasOwnKey(triggers, 'push'), 'workflow must run on push')
   check(hasOwnKey(triggers, 'pull_request'), 'workflow must run on pull_request')
   check(hasOwnKey(triggers, 'workflow_dispatch'), 'workflow must support workflow_dispatch')
-  check(androidJob?.['runs-on'] === 'ubuntu-24.04', 'android-debug-apk job must run on ubuntu-24.04')
+  check(androidJob?.['runs-on'] === 'ubuntu-24.04', 'android-release-apk job must run on ubuntu-24.04')
   check(hasActionStep(steps, 'actions/checkout@'), 'workflow must checkout the repository')
   check(hasActionStep(steps, 'actions/setup-node@'), 'workflow must set up Node.js')
   check(hasActionStep(steps, 'actions/setup-java@'), 'workflow must set up Java')
@@ -160,10 +160,22 @@ if (existsSync(workflowPath)) {
   check(hasRunStep(steps, 'npx cap sync android'), 'workflow must sync Capacitor Android assets')
   check(hasRunStep(steps, 'SDKMANAGER='), 'workflow must resolve sdkmanager from ANDROID_HOME')
   check(hasRunStep(steps, '"$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"'), 'workflow must ensure Android SDK 36 build components through resolved sdkmanager')
-  check(hasRunStep(steps, './gradlew assembleDebug'), 'workflow must build the Android debug APK')
+  check(hasRunStep(steps, 'RELEASE_KEYSTORE_BASE64'), 'workflow must support release keystore secrets')
+  check(hasRunStep(steps, 'keytool -genkeypair'), 'workflow must create a CI release signing key')
+  check(hasRunStep(steps, './gradlew assembleRelease'), 'workflow must build the Android release APK')
+  check(hasRunStep(steps, 'android.injected.signing.store.file'), 'workflow must inject signing config for the release APK')
+  check(!hasRunStep(steps, './gradlew assembleDebug'), 'workflow must not build the Android debug APK')
   check(
-    steps.some((step) => step.uses === 'actions/upload-artifact@v4' && step.with?.name === 'sea-focus-debug-apk'),
-    'workflow must upload the sea-focus-debug-apk artifact',
+    steps.some((step) => step.uses === 'actions/upload-artifact@v4' && step.with?.name === 'sea-focus-release-apk'),
+    'workflow must upload the sea-focus-release-apk artifact',
+  )
+  check(
+    steps.some((step) => step.uses === 'actions/upload-artifact@v4' && String(step.with?.path ?? '').includes('outputs/apk/release')),
+    'workflow must upload release APK outputs',
+  )
+  check(
+    !steps.some((step) => step.uses === 'actions/upload-artifact@v4' && String(step.with?.path ?? '').includes('outputs/apk/debug')),
+    'workflow must not upload debug APK outputs',
   )
 }
 

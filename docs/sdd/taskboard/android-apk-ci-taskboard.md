@@ -14,7 +14,7 @@ Date: 2026-04-24
 - [x] Clean AI Studio template metadata and unused dependencies.
 - [x] Add Capacitor dependencies and configuration.
 - [x] Generate Android platform project.
-- [x] Add GitHub Actions workflow for debug APK artifact.
+- [x] Add GitHub Actions workflow for release APK artifact.
 - [x] Run validation, lint, web build, and Capacitor sync.
-- [x] Investigate local Android debug build blocker.
+- [x] Investigate local Android release build blocker.
 - [x] Record final verification status.

@@ -7,6 +7,7 @@ import {
   formatDateKey,
   getChineseWeekday,
 } from '../features/calendar/dateUtils';
+import { DailyHarvestTheme, getDailyHarvestTheme } from '../features/plan/dailyHarvestTheme';
 
 interface PlanPageProps {
   tasks: Task[];
@@ -28,6 +29,7 @@ let hasCenteredInitialPlanDate = false;
 
 export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAddTask, onToggleTask }) => {
   const todayKey = formatDateKey(new Date());
+  const harvestTheme = useMemo(() => getDailyHarvestTheme(new Date()), [todayKey]);
   const [selectedDateKey, setSelectedDateKeyState] = useState(() => persistedSelectedDateKey ?? todayKey);
   const [viewMode, setViewMode] = useState<'active' | 'archive'>('active');
   const [isAdding, setIsAdding] = useState(false);
@@ -120,10 +122,11 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
           </div>
           <button
             onClick={() => selectDate(todayKey)}
-            className="w-10 h-10 rounded-full border border-nature-primary p-0.5"
-            aria-label="回到今天"
+            className="w-11 h-11 rounded-full border border-nature-primary bg-white p-1 shadow-sm active:scale-95 transition-transform"
+            aria-label={`回到今天，今日主题${harvestTheme.label}`}
+            title={harvestTheme.label}
           >
-            <div className="w-full h-full bg-[#e9e8e0] rounded-full" />
+            <DailyHarvestIllustration theme={harvestTheme} />
           </button>
         </div>
       </div>
@@ -278,6 +281,87 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
 function normalizeTaskDateKey(date: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   return formatDateKey(new Date(date));
+}
+
+function DailyHarvestIllustration({ theme }: { theme: DailyHarvestTheme }) {
+  return (
+    <svg className="w-full h-full rounded-full" viewBox="0 0 48 48" role="img" aria-label={theme.label}>
+      <circle cx="24" cy="24" r="22" fill={theme.accentColor} />
+      <path
+        d="M10 31 C17 27, 22 35, 29 30 C34 26, 39 28, 43 24 L43 43 L10 43 Z"
+        fill={theme.secondaryColor}
+        opacity="0.18"
+      />
+      <DailyHarvestMotif theme={theme} />
+    </svg>
+  );
+}
+
+function DailyHarvestMotif({ theme }: { theme: DailyHarvestTheme }) {
+  if (theme.id === 'leaf') {
+    return (
+      <>
+        <path d="M24 34 C22 25, 24 17, 31 11" fill="none" stroke={theme.primaryColor} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M26 20 C19 17, 16 19, 14 25 C20 26, 24 24, 26 20 Z" fill={theme.secondaryColor} />
+        <path d="M29 16 C34 15, 37 18, 37 23 C32 24, 29 21, 29 16 Z" fill={theme.primaryColor} />
+      </>
+    );
+  }
+
+  if (theme.id === 'shell') {
+    return (
+      <>
+        <path d="M14 31 C15 20, 20 14, 24 14 C30 14, 35 21, 35 31 Z" fill="#fffaf0" stroke={theme.primaryColor} strokeWidth="2" />
+        <path d="M18 30 C19 23, 21 18, 24 14 M24 31 L24 14 M30 30 C29 23, 27 18, 24 14" fill="none" stroke={theme.secondaryColor} strokeWidth="1.4" strokeLinecap="round" />
+      </>
+    );
+  }
+
+  if (theme.id === 'wave') {
+    return (
+      <>
+        <path d="M11 29 C16 21, 23 35, 29 27 C34 20, 38 23, 41 27" fill="none" stroke={theme.primaryColor} strokeWidth="3" strokeLinecap="round" />
+        <path d="M12 35 C18 30, 22 38, 29 33 C34 29, 39 31, 42 34" fill="none" stroke={theme.secondaryColor} strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+      </>
+    );
+  }
+
+  if (theme.id === 'seed') {
+    return (
+      <>
+        <ellipse cx="24" cy="26" rx="8" ry="11" fill={theme.primaryColor} transform="rotate(18 24 26)" />
+        <path d="M21 21 C25 23, 28 27, 29 32" fill="none" stroke={theme.accentColor} strokeWidth="1.7" strokeLinecap="round" opacity="0.75" />
+        <circle cx="18" cy="17" r="3" fill={theme.secondaryColor} opacity="0.85" />
+      </>
+    );
+  }
+
+  if (theme.id === 'sprout') {
+    return (
+      <>
+        <path d="M24 35 L24 21" stroke={theme.primaryColor} strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M24 23 C17 18, 13 21, 12 28 C18 29, 23 27, 24 23 Z" fill={theme.secondaryColor} />
+        <path d="M24 22 C30 16, 36 18, 37 25 C31 27, 26 25, 24 22 Z" fill={theme.primaryColor} />
+      </>
+    );
+  }
+
+  if (theme.id === 'sun') {
+    return (
+      <>
+        <circle cx="24" cy="24" r="8" fill={theme.primaryColor} />
+        <path d="M24 11 V15 M24 33 V37 M11 24 H15 M33 24 H37 M15 15 L18 18 M30 30 L33 33 M33 15 L30 18 M18 30 L15 33" stroke={theme.secondaryColor} strokeWidth="2.2" strokeLinecap="round" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <circle cx="24" cy="27" r="9" fill={theme.primaryColor} />
+      <path d="M19 18 C20 13, 25 14, 24 19 C29 15, 33 18, 31 22 C27 22, 23 21, 19 18 Z" fill={theme.secondaryColor} />
+      <path d="M19 27 C21 29, 27 29, 29 26" fill="none" stroke="#fffaf0" strokeWidth="1.7" strokeLinecap="round" opacity="0.8" />
+    </>
+  );
 }
 
 function centerDateInStrip(container: HTMLDivElement, selectedDate: HTMLButtonElement, behavior: ScrollBehavior) {

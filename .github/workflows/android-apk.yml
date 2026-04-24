@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  android-debug-apk:
-    name: Build debug APK
+  android-release-apk:
+    name: Build release APK
     runs-on: ubuntu-24.04
 
     steps:
@@ -60,16 +60,52 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
+        shell: bash
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.SEA_FOCUS_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.SEA_FOCUS_RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.SEA_FOCUS_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.SEA_FOCUS_RELEASE_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          KEYSTORE_PATH="${RUNNER_TEMP}/sea-focus-ci-release.jks"
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            if [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
+              echo "Release keystore secret is set, but password or alias secrets are missing." >&2
+              exit 1
+            fi
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
+            KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+            KEY_ALIAS="$RELEASE_KEY_ALIAS"
+          else
+            STORE_PASSWORD="sea-focus-ci-release"
+            KEY_PASSWORD="sea-focus-ci-release"
+            KEY_ALIAS="sea-focus-ci-release"
+            keytool -genkeypair \
+              -v \
+              -storetype PKCS12 \
+              -keystore "$KEYSTORE_PATH" \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$STORE_PASSWORD" \
+              -keypass "$KEY_PASSWORD" \
+              -dname "CN=Sea Focus CI,O=Sea Focus,C=US"
+          fi
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
-      - name: Upload debug APK
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: sea-focus-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: sea-focus-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14

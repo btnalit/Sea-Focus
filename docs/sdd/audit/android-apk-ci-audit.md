@@ -25,7 +25,7 @@ Current local data chain:
 
 Planned APK chain:
 
-`src/*` -> `npm run build` -> `dist` -> `npx cap sync android` -> `android` Gradle project -> `assembleDebug` -> APK artifact.
+`src/*` -> `npm run build` -> `dist` -> `npx cap sync android` -> `android` Gradle project -> `assembleRelease` -> release APK artifact.
 
 No backend or database call path exists to review for this change.
 
@@ -45,11 +45,11 @@ Use Capacitor because the repository is already a web app and Capacitor is desig
 
 ## Risks
 
-- Debug APK is installable for testing but not suitable for store release.
-- Release signing requires a keystore and GitHub secrets; that is intentionally excluded from this change.
+- Release APK is now the CI target instead of debug APK.
+- Release signing supports a configured GitHub secret keystore and falls back to a generated CI signing key when secrets are absent.
 - Android background timer accuracy may need native plugins later if the product requires reliable notifications while the app is backgrounded.
 - Local machine Java/Android SDK versions can differ from GitHub-hosted runners; CI uses JDK 21 and the `ubuntu-24.04` runner to pin the expected build environment.
-- Local verification cannot complete `assembleDebug` on this machine until Android SDK is installed and `ANDROID_HOME` or `ANDROID_SDK_ROOT` is configured.
+- Local verification cannot complete `assembleRelease` on this machine until Android SDK is installed and `ANDROID_HOME` or `ANDROID_SDK_ROOT` is configured.
 - Large JavaScript chunk size may grow as UI assets and charts expand; code splitting can be added after the APK pipeline is stable.
 
 ## Verification Notes
@@ -58,7 +58,7 @@ Use Capacitor because the repository is already a web app and Capacitor is desig
 - `npm run build` passed on 2026-04-24 with a non-blocking Vite chunk-size warning for the main JavaScript bundle.
 - `npm run test:ci-config` passed on 2026-04-24 with 35 checks.
 - `npx cap sync android` passed on 2026-04-24.
-- Local `android/gradlew.bat assembleDebug --no-daemon --stacktrace` reached Android Gradle configuration, then failed because this Windows machine has no Android SDK path configured. Evidence: `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset, `sdkmanager` and `adb` are not on PATH, and common local SDK paths do not exist.
+- Local `android/gradlew.bat assembleRelease --no-daemon --stacktrace` reaches Android Gradle configuration, but this Windows machine still has no Android SDK path configured. Evidence: `ANDROID_HOME` and `ANDROID_SDK_ROOT` are unset, `sdkmanager` and `adb` are not on PATH, and common local SDK paths do not exist.
 - GitHub Actions is configured on `ubuntu-24.04`; the official runner image includes `ANDROID_HOME=/usr/local/lib/android/sdk`, Android SDK platform 36, and build-tools 36.0.0.
 
 ## Source References
