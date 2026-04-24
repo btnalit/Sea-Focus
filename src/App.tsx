@@ -137,7 +137,7 @@ export default function App() {
                 onDeleteEntry={deleteJournalEntry}
               />
             )}
-            {activeTab === 'focus' && <FocusPage onFocusComplete={addFocusRecord} />}
+            {activeTab === 'focus' && <FocusPage tasks={tasks} onFocusComplete={addFocusRecord} />}
             {activeTab === 'stats' && <StatsPage records={records} tasks={tasks} />}
           </motion.div>
         </AnimatePresence>

@@ -18,12 +18,23 @@ export interface JournalEntry {
   updatedAt: string;
 }
 
+export type FocusTaskLinkStatus = 'active' | 'archived' | 'deleted';
+
+export interface FocusTaskSnapshot {
+  taskId: string;
+  taskTitle: string;
+  taskQuadrant: TaskQuadrant;
+  taskDate: string;
+  taskLinkStatus: FocusTaskLinkStatus;
+}
+
 export interface FocusRecord {
   id: string;
   type: 'pomodoro' | 'stopwatch' | 'countdown';
   duration: number; // in seconds
   category: string;
   timestamp: string;
+  task?: FocusTaskSnapshot;
 }
 
 export type AppTab = 'plan' | 'view' | 'focus' | 'stats';

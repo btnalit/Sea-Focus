@@ -39,6 +39,13 @@ test('saves and loads tasks, focus records, and journal entries through the fron
       duration: 1500,
       category: '深度工作',
       timestamp: '2026-04-24T09:00:00.000Z',
+      task: {
+        taskId: 'task-1',
+        taskTitle: '整理计划',
+        taskQuadrant: 'urgent-important',
+        taskDate: '2026-04-24',
+        taskLinkStatus: 'active',
+      },
     },
   ];
   const entries: JournalEntry[] = [

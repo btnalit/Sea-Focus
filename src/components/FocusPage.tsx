@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { FocusRecord } from '../types';
+import { FocusRecord, FocusTaskSnapshot, Task, TaskQuadrant } from '../types';
+import { formatDateKey } from '../features/calendar/dateUtils';
 import {
   clampFocusMinutes,
   FocusDurationPresetId,
@@ -10,24 +11,46 @@ import {
   toFocusDurationSeconds,
 } from '../features/focus/durationPresets';
 import { shouldSaveStopwatchSession } from '../features/focus/sessionCompletion';
+import {
+  buildFocusTaskSnapshot,
+  getSelectableFocusTasks,
+  resolveFocusTaskSnapshot,
+} from '../features/focus/focusTaskLinking';
+import { isTaskCarriedForward } from '../features/plan/taskLifecycle';
 
 interface FocusPageProps {
+  tasks: Task[];
   onFocusComplete: (record: Omit<FocusRecord, 'id' | 'timestamp'>) => void;
 }
 
 const FOCUS_CATEGORIES = ['深度工作', '日常维护', '冥想复盘', '学习成长', '其他'];
 
-export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
+const TASK_CATEGORY_LABELS: Record<TaskQuadrant, string> = {
+  'urgent-important': '深度工作',
+  'not-urgent-important': '学习成长',
+  'urgent-not-important': '日常维护',
+  'not-urgent-not-important': '冥想复盘',
+};
+
+export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) => {
   const [mode, setMode] = useState<'stopwatch' | 'pomodoro' | 'countdown'>('pomodoro');
   const [selectedPreset, setSelectedPreset] = useState<FocusDurationPresetId>('25');
   const [customMinutes, setCustomMinutes] = useState(25);
   const [category, setCategory] = useState(FOCUS_CATEGORIES[0]);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskSnapshot, setSelectedTaskSnapshot] = useState<FocusTaskSnapshot | null>(null);
   const [timeLeft, setTimeLeft] = useState(toFocusDurationSeconds(25));
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [initialTime, setInitialTime] = useState(toFocusDurationSeconds(25));
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const selectedSeconds = toFocusDurationSeconds(selectedPreset === 'custom' ? customMinutes : Number(selectedPreset));
+  const today = new Date();
+  const todayKey = formatDateKey(today);
+  const selectableFocusTasks = getSelectableFocusTasks(tasks, today);
+  const selectedTaskStillSelectable = selectedTaskId
+    ? selectableFocusTasks.some((task) => task.id === selectedTaskId)
+    : false;
 
   useEffect(() => {
     if (!isActive && mode !== 'stopwatch') {
@@ -56,22 +79,25 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
   useEffect(() => {
     if (isActive && mode !== 'stopwatch' && timeLeft === 0) {
       setIsActive(false);
-      onFocusComplete({
-        type: mode,
-        duration: initialTime,
-        category,
-      });
+      onFocusComplete(buildFocusRecord(mode, initialTime));
     }
-  }, [category, initialTime, isActive, mode, onFocusComplete, timeLeft]);
+  }, [initialTime, isActive, mode, onFocusComplete, timeLeft, tasks, selectedTaskId, selectedTaskSnapshot, category]);
+
+  const buildFocusRecord = (
+    recordType: FocusRecord['type'],
+    duration: number,
+  ): Omit<FocusRecord, 'id' | 'timestamp'> => {
+    const taskSnapshot = resolveFocusTaskSnapshot(tasks, selectedTaskId, selectedTaskSnapshot);
+
+    return taskSnapshot
+      ? { type: recordType, duration, category, task: taskSnapshot }
+      : { type: recordType, duration, category };
+  };
 
   const handleModeChange = (nextMode: typeof mode) => {
     if (nextMode === mode) return;
     if (mode === 'stopwatch' && shouldSaveStopwatchSession(elapsedSeconds)) {
-      onFocusComplete({
-        type: mode,
-        duration: elapsedSeconds,
-        category,
-      });
+      onFocusComplete(buildFocusRecord(mode, elapsedSeconds));
     }
     setIsActive(false);
     setMode(nextMode);
@@ -80,6 +106,20 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
       setInitialTime(selectedSeconds);
       setTimeLeft(selectedSeconds);
     }
+  };
+
+  const handleTaskSelect = (task: Task | null) => {
+    if (isActive) return;
+
+    if (!task) {
+      setSelectedTaskId(null);
+      setSelectedTaskSnapshot(null);
+      return;
+    }
+
+    setSelectedTaskId(task.id);
+    setSelectedTaskSnapshot(buildFocusTaskSnapshot(task));
+    setCategory(TASK_CATEGORY_LABELS[task.quadrant]);
   };
 
   const handlePresetChange = (presetId: FocusDurationPresetId) => {
@@ -105,11 +145,7 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
     if (isActive && mode === 'stopwatch') {
       setIsActive(false);
       if (shouldSaveStopwatchSession(elapsedSeconds)) {
-        onFocusComplete({
-          type: mode,
-          duration: elapsedSeconds,
-          category,
-        });
+        onFocusComplete(buildFocusRecord(mode, elapsedSeconds));
         setElapsedSeconds(0);
       }
       return;
@@ -147,6 +183,50 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
       <div className="text-center mb-5">
         <h2 className="italic-serif text-2xl mb-1">当前专注</h2>
         <p className="text-sm opacity-50 font-medium">深度工作，静待花开</p>
+      </div>
+
+      <div className="w-full max-w-xs mb-5 text-left">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <span className="text-xs font-bold tracking-[0.2em] text-nature-text/45">关联计划</span>
+          <span className="text-[10px] font-bold tracking-widest text-nature-secondary/80">
+            {selectedTaskSnapshot ? '本次记录会写入计划快照' : '可选未完成计划'}
+          </span>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            disabled={isActive}
+            onClick={() => handleTaskSelect(null)}
+            className={cn(
+              "shrink-0 rounded-full border px-4 py-2 text-[11px] font-bold tracking-widest transition-all disabled:opacity-50",
+              !selectedTaskId ? "bg-nature-primary text-white border-nature-primary shadow-sm" : "bg-white border-nature-border text-nature-text/55",
+            )}
+          >
+            自由专注
+          </button>
+          {selectableFocusTasks.map((task) => (
+            <button
+              key={task.id}
+              type="button"
+              disabled={isActive}
+              onClick={() => handleTaskSelect(task)}
+              className={cn(
+                "shrink-0 max-w-[9rem] rounded-full border px-4 py-2 text-left transition-all disabled:opacity-50",
+                selectedTaskId === task.id ? "bg-nature-secondary text-white border-nature-secondary shadow-sm" : "bg-white border-nature-border text-nature-text/60",
+              )}
+            >
+              <span className="block truncate text-[11px] font-bold tracking-widest">{task.title}</span>
+              <span className="mt-0.5 block text-[9px] font-bold tracking-widest opacity-60">
+                {isTaskCarriedForward(task, todayKey) ? '追踪中' : '今日计划'}
+              </span>
+            </button>
+          ))}
+        </div>
+        {selectedTaskSnapshot && !selectedTaskStillSelectable && (
+          <p className="mt-2 px-1 text-[10px] font-bold tracking-widest text-nature-secondary/70">
+            当前计划已变化，本次会保留快照后写入记录。
+          </p>
+        )}
       </div>
       
       <div className="w-full max-w-xs mb-6 space-y-3">
