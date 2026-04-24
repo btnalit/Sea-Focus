@@ -9,6 +9,7 @@ import {
   FOCUS_DURATION_PRESETS,
   toFocusDurationSeconds,
 } from '../features/focus/durationPresets';
+import { shouldSaveStopwatchSession } from '../features/focus/sessionCompletion';
 
 interface FocusPageProps {
   onFocusComplete: (record: Omit<FocusRecord, 'id' | 'timestamp'>) => void;
@@ -26,8 +27,7 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
   const [isActive, setIsActive] = useState(false);
   const [initialTime, setInitialTime] = useState(toFocusDurationSeconds(25));
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const selectedMinutes = selectedPreset === 'custom' ? customMinutes : Number(selectedPreset);
-  const selectedSeconds = toFocusDurationSeconds(selectedMinutes);
+  const selectedSeconds = toFocusDurationSeconds(selectedPreset === 'custom' ? customMinutes : Number(selectedPreset));
 
   useEffect(() => {
     if (!isActive && mode !== 'stopwatch') {
@@ -65,6 +65,14 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
   }, [category, initialTime, isActive, mode, onFocusComplete, timeLeft]);
 
   const handleModeChange = (nextMode: typeof mode) => {
+    if (nextMode === mode) return;
+    if (mode === 'stopwatch' && shouldSaveStopwatchSession(elapsedSeconds)) {
+      onFocusComplete({
+        type: mode,
+        duration: elapsedSeconds,
+        category,
+      });
+    }
     setIsActive(false);
     setMode(nextMode);
     setElapsedSeconds(0);
@@ -94,6 +102,19 @@ export const FocusPage: React.FC<FocusPageProps> = ({ onFocusComplete }) => {
   };
 
   const toggleTimer = () => {
+    if (isActive && mode === 'stopwatch') {
+      setIsActive(false);
+      if (shouldSaveStopwatchSession(elapsedSeconds)) {
+        onFocusComplete({
+          type: mode,
+          duration: elapsedSeconds,
+          category,
+        });
+        setElapsedSeconds(0);
+      }
+      return;
+    }
+
     if (!isActive && mode !== 'stopwatch' && timeLeft === 0) {
       setTimeLeft(initialTime);
     }
