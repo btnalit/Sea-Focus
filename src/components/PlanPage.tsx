@@ -16,7 +16,7 @@ import {
 
 interface PlanPageProps {
   tasks: Task[];
-  todayPomodoros: number;
+  todayArchivedTasks: number;
   onAddTask: (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => void;
   onToggleTask: (id: string) => void;
 }
@@ -32,7 +32,7 @@ let persistedSelectedDateKey: string | null = null;
 let persistedDateStripScrollLeft: number | null = null;
 let hasCenteredInitialPlanDate = false;
 
-export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAddTask, onToggleTask }) => {
+export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayArchivedTasks, onAddTask, onToggleTask }) => {
   const todayKey = formatDateKey(new Date());
   const harvestTheme = useMemo(() => getDailyHarvestTheme(new Date()), [todayKey]);
   const [selectedDateKey, setSelectedDateKeyState] = useState(() => persistedSelectedDateKey ?? todayKey);
@@ -121,8 +121,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-[10px] opacity-50 uppercase font-bold tracking-tighter">今日收获</div>
-            <div className="text-xs italic-serif italic font-medium">{todayPomodoros} 番茄</div>
+            <div className="text-[10px] opacity-50 uppercase font-bold tracking-tighter">今日归档</div>
+            <div className="text-xs italic-serif italic font-medium">{todayArchivedTasks} 项</div>
           </div>
           <button
             onClick={() => selectDate(todayKey)}

@@ -12,15 +12,15 @@ import { StatsPage } from './components/StatsPage';
 import { CalendarPage } from './components/CalendarPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
-import { buildFocusStats } from './features/stats/focusStats';
 import { toggleTaskCompletion } from './features/plan/taskLifecycle';
+import { buildPlanHeaderStats } from './features/plan/planHeaderStats';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('focus');
   const [tasks, setTasks] = useState<Task[]>(() => seaFocusStorage.loadTasks());
   const [records, setRecords] = useState<FocusRecord[]>(() => seaFocusStorage.loadFocusRecords());
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => seaFocusStorage.loadJournalEntries());
-  const todayPomodoros = buildFocusStats(records).todayPomodoros;
+  const planHeaderStats = buildPlanHeaderStats(tasks, records);
 
   // Sync data to localStorage
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function App() {
             {activeTab === 'plan' && (
               <PlanPage
                 tasks={tasks}
-                todayPomodoros={todayPomodoros}
+                todayArchivedTasks={planHeaderStats.todayArchivedTasks}
                 onAddTask={addTask}
                 onToggleTask={toggleTask}
               />
