@@ -32,3 +32,4 @@ Date: 2026-04-24
 - Android resource XML parse scan: passed, 12 XML files.
 - `git diff --check`: passed.
 - Focus-link static scan confirms `getSelectableFocusTasks`, `resolveFocusTaskSnapshot`, and `FocusTaskSnapshot` are wired through types, helper, `FocusPage`, and storage test.
+- Commit: `7b1049a feat: link focus sessions to plans`.
