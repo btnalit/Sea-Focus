@@ -5,9 +5,9 @@ import {
   buildFocusStats,
   FocusStatsPeriod,
   formatDuration,
-  getFocusRecordsForPeriod,
 } from '../features/stats/focusStats';
 import { buildTaskForecast } from '../features/stats/taskForecast';
+import { buildTaskHarvestStats, getCompletedTasksForPeriod } from '../features/stats/taskHarvest';
 import { buildGardenChartSegments, GardenChartInput, GardenChartSegment } from '../features/stats/chartPresentation';
 import { cn } from '../lib/utils';
 
@@ -20,15 +20,15 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
   const [mode, setMode] = React.useState<'estimate' | 'harvest'>('harvest');
   const [period, setPeriod] = React.useState<FocusStatsPeriod>('day');
   const stats = buildFocusStats(records);
-  const periodRecords = getFocusRecordsForPeriod(records, period);
-  const periodStats = buildFocusStats(periodRecords);
   const forecast = buildTaskForecast(tasks, period);
+  const harvest = buildTaskHarvestStats(tasks);
+  const periodHarvest = buildTaskHarvestStats(getCompletedTasksForPeriod(tasks, period));
   const chartItems: GardenChartInput[] = mode === 'harvest'
-    ? periodStats.totalDistribution.map((item) => ({
+    ? periodHarvest.completedDistribution.map((item) => ({
       name: item.name,
-      value: item.seconds,
+      value: item.completedTaskCount,
       color: item.color,
-      helper: `${item.percentage}% · ${formatDuration(item.seconds)}`,
+      helper: `${item.completedTaskCount} 项 · ${item.percentage}%`,
     }))
     : forecast.distribution.map((item) => ({
       name: item.name,
@@ -62,7 +62,7 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
       </div>
 
       {mode === 'harvest' ? (
-        <HarvestSummary stats={stats} />
+        <HarvestSummary stats={stats} harvest={harvest} />
       ) : (
         <EstimateSummary forecast={forecast} />
       )}
@@ -77,9 +77,9 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
           </h4>
           <p className="italic-serif italic text-lg leading-tight">
             {mode === 'harvest'
-              ? stats.todaySeconds > 0
-                ? '你今日已经进入专注节奏。大自然会奖励充满耐心的大脑。'
-                : '今天还没有专注记录，先播种一个小番茄。'
+              ? harvest.todayCompletedTasks > 0
+                ? `今天已经收获 ${harvest.todayCompletedTasks} 个计划，继续照料你的专注庭院。`
+                : '今天还没有归档计划，先完成一个小目标。'
               : forecast.activeTasks > 0
                 ? `当前周期还有 ${forecast.activeTasks} 个计划，建议预留 ${forecast.estimatedPomodoros} 个番茄。`
                 : '当前周期没有待办计划，可以安排复盘或留白。'}
@@ -97,23 +97,29 @@ export const StatsPage: React.FC<StatsPageProps> = ({ records, tasks }) => {
         </div>
 
         <GardenChart
-          emptyText={mode === 'harvest' ? '完成一次专注后生成图鉴' : '添加计划后生成预估'}
-          label={`${getPeriodLabel(period)}${mode === 'harvest' ? '专注' : '预估'}`}
+          emptyText={mode === 'harvest' ? '完成一个计划后生成图鉴' : '添加计划后生成预估'}
+          label={`${getPeriodLabel(period)}${mode === 'harvest' ? '收获' : '预估'}`}
           segments={chartSegments}
-          value={mode === 'harvest' ? formatDuration(periodStats.totalSeconds) : `${forecast.estimatedPomodoros} 番茄`}
+          value={mode === 'harvest' ? `${periodHarvest.totalCompletedTasks} 项` : `${forecast.estimatedPomodoros} 番茄`}
         />
       </div>
     </div>
   );
 };
 
-function HarvestSummary({ stats }: { stats: ReturnType<typeof buildFocusStats> }) {
+function HarvestSummary({
+  stats,
+  harvest,
+}: {
+  stats: ReturnType<typeof buildFocusStats>;
+  harvest: ReturnType<typeof buildTaskHarvestStats>;
+}) {
   return (
     <div className="bg-white border border-nature-border rounded-[40px] p-8 shadow-sm mb-6">
       <div className="grid grid-cols-2 gap-y-10">
-        <Metric title="今日收获" value={stats.todayPomodoros} suffix="番茄" helper="稳步前行" />
+        <Metric title="今日收获" value={harvest.todayCompletedTasks} suffix="项" helper="稳步前行" />
         <Metric title="巅峰心流" value={formatDuration(stats.longestSeconds)} suffix="最长" bordered />
-        <Metric title="总计播种" value={stats.totalPomodoros} suffix="颗" />
+        <Metric title="累计归档" value={harvest.totalCompletedTasks} suffix="项" />
         <Metric title="总计专注" value={formatDuration(stats.totalSeconds)} bordered compact />
       </div>
     </div>
