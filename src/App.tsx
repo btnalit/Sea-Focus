@@ -132,7 +132,7 @@ export default function App() {
               />
             )}
             {activeTab === 'focus' && <FocusPage onFocusComplete={addFocusRecord} />}
-            {activeTab === 'stats' && <StatsPage records={records} />}
+            {activeTab === 'stats' && <StatsPage records={records} tasks={tasks} />}
           </motion.div>
         </AnimatePresence>
       </main>

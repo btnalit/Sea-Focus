@@ -32,3 +32,12 @@ body {
 .handwriting {
   font-family: var(--font-serif); /* Using serif for elegance in new theme */
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

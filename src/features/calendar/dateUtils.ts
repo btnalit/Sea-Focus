@@ -48,6 +48,18 @@ export function buildCenteredDateStrip(centerDate: Date): Date[] {
 }
 
 /**
+ * Builds a reusable date range around a center date for horizontal date strips.
+ *
+ * @param centerDate center date
+ * @param daysBefore number of days before center
+ * @param daysAfter number of days after center
+ * @returns local dates in ascending order
+ */
+export function buildDateRangeAround(centerDate: Date, daysBefore = 30, daysAfter = 30): Date[] {
+  return Array.from({ length: daysBefore + daysAfter + 1 }, (_, index) => addDays(centerDate, index - daysBefore));
+}
+
+/**
  * Builds a six-week, Monday-first month grid.
  *
  * @param year full year

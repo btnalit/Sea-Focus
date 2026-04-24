@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCenteredDateStrip, buildMonthGrid, formatDateKey } from './dateUtils';
+import { buildCenteredDateStrip, buildDateRangeAround, buildMonthGrid, formatDateKey } from './dateUtils';
 
 test('centers the given day in a seven day date strip', () => {
   const today = new Date('2026-04-24T13:42:00+08:00');
@@ -26,4 +26,19 @@ test('builds a complete monday-first month grid', () => {
   assert.equal(formatDateKey(grid[0]), '2026-03-30');
   assert.equal(formatDateKey(grid[4]), '2026-04-03');
   assert.equal(formatDateKey(grid[41]), '2026-05-10');
+});
+
+test('builds a reusable swipe range around a center date', () => {
+  const today = new Date('2026-04-24T13:42:00+08:00');
+  const range = buildDateRangeAround(today, 3, 3);
+
+  assert.deepEqual(range.map(formatDateKey), [
+    '2026-04-21',
+    '2026-04-22',
+    '2026-04-23',
+    '2026-04-24',
+    '2026-04-25',
+    '2026-04-26',
+    '2026-04-27',
+  ]);
 });

@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Task, TaskQuadrant } from '../types';
 import { cn } from '../lib/utils';
 import {
-  buildCenteredDateStrip,
+  buildDateRangeAround,
   formatDateKey,
   getChineseWeekday,
-  parseDateKey,
 } from '../features/calendar/dateUtils';
 
 interface PlanPageProps {
@@ -30,9 +29,20 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
   const [isAdding, setIsAdding] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [targetQuadrant, setTargetQuadrant] = useState<TaskQuadrant>('urgent-important');
-  const dateStrip = buildCenteredDateStrip(parseDateKey(selectedDateKey));
+  const dateStrip = useMemo(() => buildDateRangeAround(new Date(), 45, 45), []);
+  const selectedDateRef = useRef<HTMLButtonElement | null>(null);
+  const hasAlignedDateStrip = useRef(false);
   const selectedDateTasks = tasks.filter((task) => normalizeTaskDateKey(task.date) === selectedDateKey);
   const visibleTasks = selectedDateTasks.filter((task) => viewMode === 'archive' ? task.completed : !task.completed);
+
+  useLayoutEffect(() => {
+    selectedDateRef.current?.scrollIntoView({
+      behavior: hasAlignedDateStrip.current ? 'smooth' : 'auto',
+      inline: 'center',
+      block: 'nearest',
+    });
+    hasAlignedDateStrip.current = true;
+  }, [selectedDateKey]);
 
   const handleAdd = () => {
     if (!newTaskTitle.trim()) return;
@@ -80,8 +90,8 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
         </div>
       </div>
 
-      <div className="mb-8">
-        <div className="grid grid-cols-7 gap-2">
+      <div className="mb-8 -mx-6 px-6 overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide">
+        <div className="flex gap-3 w-max py-1">
           {dateStrip.map((date) => {
             const dateKey = formatDateKey(date);
             const isSelected = dateKey === selectedDateKey;
@@ -90,10 +100,11 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
             return (
               <button
                 key={dateKey}
+                ref={isSelected ? selectedDateRef : undefined}
                 onClick={() => setSelectedDateKey(dateKey)}
                 className={cn(
-                  'flex flex-col items-center justify-center h-20 rounded-[28px] border transition-all',
-                  isSelected ? 'bg-nature-primary text-white border-nature-primary shadow-lg shadow-nature-primary/20' : 'bg-white border-nature-border opacity-70',
+                  'snap-center flex flex-col items-center justify-center h-20 w-16 shrink-0 rounded-[28px] border transition-all duration-300',
+                  isSelected ? 'bg-nature-primary text-white border-nature-primary shadow-lg shadow-nature-primary/20 scale-105' : 'bg-white border-nature-border opacity-70',
                 )}
               >
                 <span className="text-[9px] font-bold tracking-widest mb-1">{getChineseWeekday(date)}</span>
@@ -118,7 +129,13 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <motion.div
+          key={`${selectedDateKey}-${viewMode}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="grid grid-cols-2 gap-4"
+        >
           {quadrants.map((q) => {
             const quadrantTasks = visibleTasks.filter((task) => task.quadrant === q.id);
 
@@ -155,7 +172,7 @@ export const PlanPage: React.FC<PlanPageProps> = ({ tasks, todayPomodoros, onAdd
               </div>
             );
           })}
-        </div>
+        </motion.div>
       </div>
 
       {isAdding && (

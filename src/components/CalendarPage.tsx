@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { cn } from '../lib/utils';
 import { buildMonthGrid, formatDateKey, getChineseWeekday, parseDateKey } from '../features/calendar/dateUtils';
@@ -23,6 +23,8 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
   const todayKey = formatDateKey(today);
   const [visibleMonth, setVisibleMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDateKey, setSelectedDateKey] = useState(todayKey);
+  const [isDayModalOpen, setIsDayModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'list' | 'form'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -43,18 +45,22 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
     setEditingId(null);
     setTitle('');
     setContent('');
+    setModalMode('list');
+    setIsDayModalOpen(true);
   };
 
   const startEdit = (entry: JournalEntry) => {
     setEditingId(entry.id);
     setTitle(entry.title);
     setContent(entry.content);
+    setModalMode('form');
   };
 
   const resetForm = () => {
     setEditingId(null);
     setTitle('');
     setContent('');
+    setModalMode('form');
   };
 
   const saveEntry = () => {
@@ -75,7 +81,10 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
       });
     }
 
-    resetForm();
+    setEditingId(null);
+    setTitle('');
+    setContent('');
+    setModalMode('list');
   };
 
   return (
@@ -153,71 +162,110 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({
         </div>
       </div>
 
-      <div className="bg-white border border-nature-border rounded-[36px] p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-[10px] font-bold tracking-widest opacity-40">选中日期</div>
-            <h2 className="italic-serif text-xl italic mt-1">
-              {selectedDateKey} 周{getChineseWeekday(parseDateKey(selectedDateKey))}
-            </h2>
-          </div>
-          <button
-            onClick={resetForm}
-            className="w-10 h-10 rounded-2xl bg-nature-primary text-white flex items-center justify-center"
-            aria-label="新建随笔"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-        </div>
+      {isDayModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-[#4a4a3544] backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-sm max-h-[82vh] overflow-y-auto bg-nature-bg border border-nature-border rounded-[36px] p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-[10px] font-bold tracking-widest opacity-40">随笔管理</div>
+                <h2 className="italic-serif text-xl italic mt-1">
+                  {selectedDateKey} 周{getChineseWeekday(parseDateKey(selectedDateKey))}
+                </h2>
+              </div>
+              <button
+                onClick={() => setIsDayModalOpen(false)}
+                className="w-10 h-10 rounded-2xl border border-nature-border bg-white flex items-center justify-center opacity-70"
+                aria-label="关闭随笔弹窗"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-        <div className="space-y-3 mb-5">
-          {selectedEntries.map((entry) => (
-            <div key={entry.id} className="rounded-3xl bg-nature-bg border border-nature-border p-4">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="font-bold text-sm">{entry.title}</h3>
-                <div className="flex gap-2">
-                  <button onClick={() => startEdit(entry)} className="opacity-50 hover:opacity-100" aria-label="编辑随笔">
-                    <Pencil className="w-4 h-4" />
+            {modalMode === 'list' ? (
+              <>
+                <div className="space-y-3 mb-5">
+                  {selectedEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      onClick={() => startEdit(entry)}
+                      className="w-full rounded-3xl bg-white border border-nature-border p-4 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h3 className="font-bold text-sm">{entry.title}</h3>
+                        <span className="opacity-40">
+                          <Pencil className="w-4 h-4" />
+                        </span>
+                      </div>
+                      <p className="text-xs leading-5 opacity-60 line-clamp-3 whitespace-pre-wrap">{entry.content || '没有正文。'}</p>
+                    </button>
+                  ))}
+                  {selectedEntries.length === 0 && (
+                    <div className="rounded-3xl border border-dashed border-nature-border p-6 text-center text-xs italic-serif italic opacity-40">
+                      这一天还没有随笔，写下一粒种子。
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={resetForm}
+                  className="w-full py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  添加随笔
+                </button>
+              </>
+            ) : (
+              <div className="rounded-3xl border border-nature-border bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] font-bold tracking-widest opacity-40">
+                    {editingId ? '编辑随笔' : '新增随笔'}
+                  </div>
+                  {editingId && (
+                    <button
+                      onClick={() => {
+                        onDeleteEntry(editingId);
+                        setModalMode('list');
+                        setEditingId(null);
+                        setTitle('');
+                        setContent('');
+                      }}
+                      className="text-nature-secondary opacity-80"
+                      aria-label="删除随笔"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="标题"
+                  className="w-full bg-transparent border-b border-nature-border py-2 mb-3 outline-none text-sm font-bold"
+                />
+                <textarea
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  placeholder="记录今天的想法、安排或复盘..."
+                  className="w-full min-h-36 bg-transparent outline-none text-sm leading-6 resize-none"
+                />
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <button
+                    onClick={() => setModalMode('list')}
+                    className="py-3 rounded-2xl border border-nature-border bg-white text-xs font-bold tracking-widest opacity-60"
+                  >
+                    返回列表
                   </button>
-                  <button onClick={() => onDeleteEntry(entry.id)} className="opacity-50 hover:opacity-100" aria-label="删除随笔">
-                    <Trash2 className="w-4 h-4" />
+                  <button
+                    onClick={saveEntry}
+                    className="py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest"
+                  >
+                    {editingId ? '保存修改' : '保存随笔'}
                   </button>
                 </div>
               </div>
-              <p className="text-xs leading-5 opacity-60 whitespace-pre-wrap">{entry.content || '没有正文。'}</p>
-            </div>
-          ))}
-          {selectedEntries.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-nature-border p-6 text-center text-xs italic-serif italic opacity-40">
-              这一天还没有随笔，写下一粒种子。
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-3xl border border-nature-border bg-nature-bg/60 p-4">
-          <div className="text-[10px] font-bold tracking-widest opacity-40 mb-3">
-            {editingId ? '编辑随笔' : '新增随笔'}
+            )}
           </div>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="标题"
-            className="w-full bg-transparent border-b border-nature-border py-2 mb-3 outline-none text-sm font-bold"
-          />
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder="记录今天的想法、安排或复盘..."
-            className="w-full min-h-24 bg-transparent outline-none text-sm leading-6 resize-none"
-          />
-          <button
-            onClick={saveEntry}
-            className="w-full mt-4 py-3 rounded-2xl bg-nature-primary text-white text-xs font-bold tracking-widest"
-          >
-            {editingId ? '保存修改' : '保存随笔'}
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
