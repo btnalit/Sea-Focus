@@ -5,11 +5,13 @@ import { cn } from '../lib/utils';
 import { FocusRecord, FocusTaskSnapshot, Task, TaskQuadrant } from '../types';
 import { formatDateKey } from '../features/calendar/dateUtils';
 import {
-  clampFocusMinutes,
+  commitCustomFocusMinutesDraft,
   FocusDurationPresetId,
   FOCUS_DURATION_PRESETS,
+  normalizeCustomFocusMinutesDraft,
   toFocusDurationSeconds,
 } from '../features/focus/durationPresets';
+import { playFocusCompletionTone, primeFocusCompletionTone } from '../features/focus/completionTone';
 import { shouldSaveStopwatchSession } from '../features/focus/sessionCompletion';
 import {
   buildFocusTaskSnapshot,
@@ -36,6 +38,7 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
   const [mode, setMode] = useState<'stopwatch' | 'pomodoro' | 'countdown'>('pomodoro');
   const [selectedPreset, setSelectedPreset] = useState<FocusDurationPresetId>('25');
   const [customMinutes, setCustomMinutes] = useState(25);
+  const [customMinutesInput, setCustomMinutesInput] = useState('25');
   const [category, setCategory] = useState(FOCUS_CATEGORIES[0]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskSnapshot, setSelectedTaskSnapshot] = useState<FocusTaskSnapshot | null>(null);
@@ -79,6 +82,7 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
   useEffect(() => {
     if (isActive && mode !== 'stopwatch' && timeLeft === 0) {
       setIsActive(false);
+      playFocusCompletionTone();
       onFocusComplete(buildFocusRecord(mode, initialTime));
     }
   }, [initialTime, isActive, mode, onFocusComplete, timeLeft, tasks, selectedTaskId, selectedTaskSnapshot, category]);
@@ -125,6 +129,9 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
   const handlePresetChange = (presetId: FocusDurationPresetId) => {
     if (isActive) return;
     setSelectedPreset(presetId);
+    if (presetId === 'custom') {
+      setCustomMinutesInput(String(customMinutes));
+    }
     const nextMinutes = presetId === 'custom' ? customMinutes : Number(presetId);
     const nextSeconds = toFocusDurationSeconds(nextMinutes);
     setInitialTime(nextSeconds);
@@ -132,10 +139,27 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
   };
 
   const handleCustomMinutesChange = (value: string) => {
-    const nextMinutes = clampFocusMinutes(Number(value));
+    const draft = normalizeCustomFocusMinutesDraft(value, customMinutes);
+    setCustomMinutesInput(draft.inputValue);
+
+    if (!draft.shouldUpdateTimer) return;
+
+    const nextMinutes = draft.minutes;
     setCustomMinutes(nextMinutes);
     if (!isActive && selectedPreset === 'custom') {
       const nextSeconds = toFocusDurationSeconds(nextMinutes);
+      setInitialTime(nextSeconds);
+      setTimeLeft(nextSeconds);
+    }
+  };
+
+  const commitCustomMinutes = () => {
+    const committedDraft = commitCustomFocusMinutesDraft(customMinutesInput);
+    setCustomMinutesInput(committedDraft.inputValue);
+    setCustomMinutes(committedDraft.minutes);
+
+    if (!isActive && selectedPreset === 'custom') {
+      const nextSeconds = toFocusDurationSeconds(committedDraft.minutes);
       setInitialTime(nextSeconds);
       setTimeLeft(nextSeconds);
     }
@@ -153,6 +177,9 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
 
     if (!isActive && mode !== 'stopwatch' && timeLeft === 0) {
       setTimeLeft(initialTime);
+    }
+    if (!isActive) {
+      primeFocusCompletionTone();
     }
     setIsActive(!isActive);
   };
@@ -251,11 +278,13 @@ export const FocusPage: React.FC<FocusPageProps> = ({ tasks, onFocusComplete }) 
             <span className="opacity-40">自定义分钟</span>
             <input
               type="number"
+              inputMode="numeric"
               min="1"
               max="240"
-              value={customMinutes}
+              value={customMinutesInput}
               disabled={isActive}
               onChange={(event) => handleCustomMinutesChange(event.target.value)}
+              onBlur={commitCustomMinutes}
               className="w-20 bg-transparent text-right outline-none text-nature-primary disabled:opacity-40"
             />
           </label>
