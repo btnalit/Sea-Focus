@@ -12,14 +12,15 @@ type AudioContextWindow = Window &
 let sharedAudioContext: AudioContext | null = null;
 
 /**
- * Builds the calm two-note completion tone used when a timed focus session ends.
+ * Builds the audible multi-step completion tone used when a timed focus session ends.
  *
  * @returns ordered Web Audio tone steps
  */
 export function buildFocusCompletionToneSteps(): FocusCompletionToneStep[] {
   return [
-    { frequency: 660, durationMs: 180, gain: 0.055 },
-    { frequency: 880, durationMs: 240, gain: 0.045 },
+    { frequency: 740, durationMs: 420, gain: 0.15 },
+    { frequency: 932, durationMs: 420, gain: 0.18 },
+    { frequency: 1175, durationMs: 620, gain: 0.16 },
   ];
 }
 
@@ -31,7 +32,7 @@ export function primeFocusCompletionTone(): void {
   const audioContext = getAudioContext();
   if (!audioContext) return;
 
-  resumeAudioContext(audioContext);
+  void resumeAudioContext(audioContext);
 }
 
 /**
@@ -41,27 +42,31 @@ export function playFocusCompletionTone(): void {
   const audioContext = getAudioContext();
   if (!audioContext) return;
 
-  resumeAudioContext(audioContext);
+  void resumeAudioContext(audioContext)
+    .then(() => scheduleFocusCompletionTone(audioContext))
+    .catch(() => undefined);
+}
 
+function scheduleFocusCompletionTone(audioContext: AudioContext): void {
   try {
-    let startAt = audioContext.currentTime + 0.02;
+    let startAt = audioContext.currentTime + 0.04;
     buildFocusCompletionToneSteps().forEach((step) => {
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
       const endAt = startAt + step.durationMs / 1000;
 
-      oscillator.type = 'sine';
+      oscillator.type = 'triangle';
       oscillator.frequency.setValueAtTime(step.frequency, startAt);
       gainNode.gain.setValueAtTime(0.0001, startAt);
-      gainNode.gain.linearRampToValueAtTime(step.gain, startAt + 0.03);
+      gainNode.gain.linearRampToValueAtTime(step.gain, startAt + 0.04);
       gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
 
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
       oscillator.start(startAt);
-      oscillator.stop(endAt + 0.02);
+      oscillator.stop(endAt + 0.03);
 
-      startAt = endAt + 0.05;
+      startAt = endAt + 0.07;
     });
   } catch {
     // Audio should never block saving the focus record.
@@ -85,8 +90,8 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
-function resumeAudioContext(audioContext: AudioContext): void {
-  if (audioContext.state !== 'suspended') return;
+function resumeAudioContext(audioContext: AudioContext): Promise<void> {
+  if (audioContext.state !== 'suspended') return Promise.resolve();
 
-  void audioContext.resume().catch(() => undefined);
+  return audioContext.resume().then(() => undefined);
 }
