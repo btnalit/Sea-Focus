@@ -3,15 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppTab, Task, FocusRecord, JournalEntry, JournalReminderSaveResult } from './types';
 import { BottomNav } from './components/BottomNav';
 import { FocusPage } from './components/FocusPage';
 import { PlanPage } from './components/PlanPage';
 import { StatsPage } from './components/StatsPage';
 import { CalendarPage } from './components/CalendarPage';
+import { SyncSettingsModal, SyncStatusState } from './components/SyncSettingsModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
+import {
+  DEFAULT_SEA_FOCUS_SYNC_ENDPOINT,
+  pullConfiguredSeaFocusSnapshot,
+  readSeaFocusSyncConfig,
+  writeSeaFocusSyncConfig,
+  type SeaFocusPullResult,
+  type SeaFocusSyncConfig,
+} from './api/seaFocusSync';
 import { deleteTaskById, toggleTaskCompletion } from './features/plan/taskLifecycle';
 import { buildPlanHeaderStats } from './features/plan/planHeaderStats';
 import {
@@ -26,6 +35,11 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>(() => seaFocusStorage.loadTasks());
   const [records, setRecords] = useState<FocusRecord[]>(() => seaFocusStorage.loadFocusRecords());
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => seaFocusStorage.loadJournalEntries());
+  const [syncConfig, setSyncConfig] = useState<SeaFocusSyncConfig>(() => loadInitialSyncConfig());
+  const [syncStatus, setSyncStatus] = useState<SyncStatusState>(() => (
+    syncConfig.readToken ? { state: 'idle' } : { state: 'not_configured' }
+  ));
+  const [isSyncSettingsOpen, setIsSyncSettingsOpen] = useState(false);
   const planHeaderStats = buildPlanHeaderStats(tasks, records);
 
   // Sync data to localStorage
@@ -40,6 +54,79 @@ export default function App() {
   useEffect(() => {
     seaFocusStorage.saveJournalEntries(journalEntries);
   }, [journalEntries]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const pullOnLaunch = async () => {
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return;
+      }
+
+      try {
+        const result = await pullConfiguredSeaFocusSnapshot({
+          backend: window.localStorage,
+          storage: seaFocusStorage,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        applySyncResult(result, setTasks, setSyncStatus);
+      } catch (error) {
+        if (!cancelled) {
+          setSyncStatus({ state: 'error', message: getSyncErrorMessage(error) });
+          console.warn('Sea Focus sync failed', error);
+        }
+      }
+    };
+
+    void pullOnLaunch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const runManualSync = useCallback(async () => {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      setSyncStatus({ state: 'error', message: '当前环境不可用' });
+      return;
+    }
+
+    setSyncStatus({ state: 'syncing' });
+    try {
+      const result = await pullConfiguredSeaFocusSnapshot({
+        backend: window.localStorage,
+        storage: seaFocusStorage,
+      });
+      applySyncResult(result, setTasks, setSyncStatus);
+    } catch (error) {
+      setSyncStatus({ state: 'error', message: getSyncErrorMessage(error) });
+      console.warn('Sea Focus sync failed', error);
+    }
+  }, []);
+
+  const saveSyncConfig = useCallback(async (config: SeaFocusSyncConfig) => {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      setSyncStatus({ state: 'error', message: '当前环境不可用' });
+      return;
+    }
+
+    const savedConfig = writeSeaFocusSyncConfig(window.localStorage, config);
+    setSyncConfig(savedConfig ?? {
+      endpoint: config.endpoint.trim() || DEFAULT_SEA_FOCUS_SYNC_ENDPOINT,
+      readToken: '',
+    });
+
+    if (!savedConfig) {
+      setSyncStatus({ state: 'not_configured' });
+      return;
+    }
+
+    await runManualSync();
+  }, [runManualSync]);
 
   const addTask = (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => {
     const newTask: Task = {
@@ -199,9 +286,11 @@ export default function App() {
               <PlanPage
                 tasks={tasks}
                 todayArchivedTasks={planHeaderStats.todayArchivedTasks}
+                syncState={syncStatus.state}
                 onAddTask={addTask}
                 onToggleTask={toggleTask}
                 onDeleteTask={deleteTask}
+                onOpenSyncSettings={() => setIsSyncSettingsOpen(true)}
               />
             )}
             {activeTab === 'view' && (
@@ -219,6 +308,62 @@ export default function App() {
       </main>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      {isSyncSettingsOpen && (
+        <SyncSettingsModal
+          initialConfig={syncConfig}
+          status={syncStatus}
+          onSave={saveSyncConfig}
+          onSync={saveSyncConfig}
+          onClose={() => setIsSyncSettingsOpen(false)}
+        />
+      )}
     </div>
   );
+}
+
+function loadInitialSyncConfig(): SeaFocusSyncConfig {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { endpoint: DEFAULT_SEA_FOCUS_SYNC_ENDPOINT, readToken: '' };
+  }
+
+  return readSeaFocusSyncConfig(window.localStorage) ?? {
+    endpoint: DEFAULT_SEA_FOCUS_SYNC_ENDPOINT,
+    readToken: '',
+  };
+}
+
+function applySyncResult(
+  result: SeaFocusPullResult,
+  setTasks: React.Dispatch<React.SetStateAction<Task[]>>,
+  setSyncStatus: React.Dispatch<React.SetStateAction<SyncStatusState>>,
+) {
+  if (result.status === 'merged') {
+    setTasks(result.tasks);
+  }
+
+  setSyncStatus(buildSyncStatus(result));
+}
+
+function buildSyncStatus(result: SeaFocusPullResult): SyncStatusState {
+  const lastSyncedAt = new Date().toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  switch (result.status) {
+    case 'merged':
+      return { state: 'synced', lastSyncedAt };
+    case 'unchanged':
+      return { state: 'unchanged', lastSyncedAt };
+    case 'stale':
+      return { state: 'stale', lastSyncedAt };
+    case 'empty':
+      return { state: 'empty', lastSyncedAt };
+    case 'not_configured':
+      return { state: 'not_configured' };
+  }
+}
+
+function getSyncErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '同步失败';
 }

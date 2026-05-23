@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
+import { Settings } from 'lucide-react';
 import { Task, TaskQuadrant } from '../types';
 import { cn } from '../lib/utils';
 import {
@@ -13,13 +14,16 @@ import {
   isTaskCarriedForward,
   normalizeTaskDateKey,
 } from '../features/plan/taskLifecycle';
+import { SyncStatusState } from './SyncSettingsModal';
 
 interface PlanPageProps {
   tasks: Task[];
   todayArchivedTasks: number;
+  syncState: SyncStatusState['state'];
   onAddTask: (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => void;
   onToggleTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
+  onOpenSyncSettings: () => void;
 }
 
 const quadrants: { id: TaskQuadrant; label: string; color: string; textColor: string; checkBoxBorder: string; checkBoxActive: string }[] = [
@@ -36,9 +40,11 @@ let hasCenteredInitialPlanDate = false;
 export const PlanPage: React.FC<PlanPageProps> = ({
   tasks,
   todayArchivedTasks,
+  syncState,
   onAddTask,
   onToggleTask,
   onDeleteTask,
+  onOpenSyncSettings,
 }) => {
   const todayKey = formatDateKey(new Date());
   const harvestTheme = useMemo(() => getDailyHarvestTheme(new Date()), [todayKey]);
@@ -155,6 +161,18 @@ export const PlanPage: React.FC<PlanPageProps> = ({
             <div className="text-[10px] opacity-50 uppercase font-bold tracking-tighter">今日归档</div>
             <div className="text-xs italic-serif italic font-medium">{todayArchivedTasks} 项</div>
           </div>
+          <button
+            onClick={onOpenSyncSettings}
+            className="relative w-11 h-11 rounded-full border border-nature-border bg-white shadow-sm flex items-center justify-center text-nature-text/60 active:scale-95 transition-transform"
+            aria-label="同步设置"
+            title="同步设置"
+          >
+            <Settings className="w-[18px] h-[18px]" />
+            <span className={cn(
+              'absolute right-2 top-2 w-2 h-2 rounded-full border border-white',
+              getSyncIndicatorClass(syncState),
+            )} />
+          </button>
           <button
             onClick={() => selectDate(todayKey)}
             className="w-11 h-11 rounded-full border border-nature-primary bg-white p-1 shadow-sm active:scale-95 transition-transform"
@@ -364,6 +382,19 @@ export const PlanPage: React.FC<PlanPageProps> = ({
     </div>
   );
 };
+
+function getSyncIndicatorClass(state: SyncStatusState['state']): string {
+  if (state === 'synced' || state === 'unchanged') {
+    return 'bg-[#7c8363]';
+  }
+  if (state === 'syncing') {
+    return 'bg-[#d0a460] animate-pulse';
+  }
+  if (state === 'stale' || state === 'error') {
+    return 'bg-[#c68a73]';
+  }
+  return 'bg-nature-border';
+}
 
 function DailyHarvestIllustration({ theme }: { theme: DailyHarvestTheme }) {
   return (
