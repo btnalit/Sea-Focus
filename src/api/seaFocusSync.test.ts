@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createSeaFocusStorage } from './seaFocusStorage';
 import {
   createSeaFocusSync,
+  getOrCreateSeaFocusSyncClientId,
   pullConfiguredSeaFocusSnapshot,
   readSeaFocusSyncConfig,
   readSyncTaskMap,
@@ -60,6 +61,42 @@ function okFetch(body: unknown): typeof fetch {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+test('creates one stable Sea Focus sync client id for audit headers', () => {
+  const backend = createMemoryStorage();
+
+  const first = getOrCreateSeaFocusSyncClientId(backend, () => 'sf_test_device');
+  const second = getOrCreateSeaFocusSyncClientId(backend, () => 'sf_other_device');
+
+  assert.equal(first, 'sf_test_device');
+  assert.equal(second, 'sf_test_device');
+});
+
+test('sends Sea Focus sync client metadata headers on snapshot pulls', async () => {
+  const backend = createMemoryStorage();
+  const storage = createSeaFocusStorage(backend);
+  backend.setItem('sea-focus-sync-client-id', 'sf_test_device');
+  const seenHeaders: Record<string, string | null> = {};
+  const fetcher: typeof fetch = async (_url, init) => {
+    const headers = new Headers(init?.headers);
+    seenHeaders.authorization = headers.get('authorization');
+    seenHeaders.clientId = headers.get('x-sea-focus-client-id');
+    seenHeaders.platform = headers.get('x-sea-focus-platform');
+    return new Response(JSON.stringify(snapshotResponse()), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const sync = createSeaFocusSync({ backend, storage, fetcher });
+
+  await sync.pullSnapshot({ endpoint: 'https://personal.opsevo.cn', readToken: 'read-token' });
+
+  assert.deepEqual(seenHeaders, {
+    authorization: 'Bearer read-token',
+    clientId: 'sf_test_device',
+    platform: 'android',
+  });
+});
 
 test('pulls a server snapshot into tasks and stores the server task map without duplicating repeats', async () => {
   const backend = createMemoryStorage();

@@ -16,6 +16,7 @@ export type SyncStatusState =
 
 interface SyncSettingsModalProps {
   initialConfig: SeaFocusSyncConfig;
+  clientId: string;
   status: SyncStatusState;
   onSave: (config: SeaFocusSyncConfig) => void | Promise<void>;
   onSync: (config: SeaFocusSyncConfig) => void | Promise<void>;
@@ -24,6 +25,7 @@ interface SyncSettingsModalProps {
 
 export const SyncSettingsModal: React.FC<SyncSettingsModalProps> = ({
   initialConfig,
+  clientId,
   status,
   onSave,
   onSync,
@@ -95,6 +97,15 @@ export const SyncSettingsModal: React.FC<SyncSettingsModalProps> = ({
               {getStatusLabel(status)}
             </span>
           </div>
+
+          {clientId && (
+            <div className="rounded-2xl bg-white/70 border border-nature-border px-4 py-3">
+              <div className="text-[10px] font-bold tracking-widest opacity-40 mb-2">设备 ID</div>
+              <div className="text-[11px] font-mono leading-relaxed text-nature-text/60 break-all">
+                {clientId}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <button

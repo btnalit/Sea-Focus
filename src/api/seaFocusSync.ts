@@ -5,6 +5,7 @@ const SYNC_CURSOR_KEY = 'sea-focus-sync-cursor';
 const SYNC_TASK_MAP_KEY = 'sea-focus-sync-task-map';
 const SYNC_ENDPOINT_KEY = 'sea-focus-sync-endpoint';
 const SYNC_READ_TOKEN_KEY = 'sea-focus-sync-read-token';
+const SYNC_CLIENT_ID_KEY = 'sea-focus-sync-client-id';
 
 export const DEFAULT_SEA_FOCUS_SYNC_ENDPOINT = 'https://seafocus.opsevo.cn';
 
@@ -95,6 +96,8 @@ export function createSeaFocusSync({
         method: 'GET',
         headers: {
           authorization: `Bearer ${config.readToken}`,
+          'x-sea-focus-client-id': getOrCreateSeaFocusSyncClientId(backend),
+          'x-sea-focus-platform': 'android',
         },
       });
 
@@ -173,6 +176,20 @@ export function writeSeaFocusSyncConfig(
   return { endpoint, readToken };
 }
 
+export function getOrCreateSeaFocusSyncClientId(
+  backend: SeaFocusSyncBackend,
+  createClientId = createDefaultSeaFocusSyncClientId,
+): string {
+  const currentClientId = backend.getItem(SYNC_CLIENT_ID_KEY)?.trim();
+  if (currentClientId) {
+    return currentClientId;
+  }
+
+  const nextClientId = createClientId();
+  backend.setItem(SYNC_CLIENT_ID_KEY, nextClientId);
+  return nextClientId;
+}
+
 export async function pullConfiguredSeaFocusSnapshot({
   backend,
   storage,
@@ -188,6 +205,17 @@ export async function pullConfiguredSeaFocusSnapshot({
   }
 
   return createSeaFocusSync({ backend, storage, fetcher }).pullSnapshot(config);
+}
+
+function createDefaultSeaFocusSyncClientId(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) {
+    return `sf_${randomUuid}`;
+  }
+
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `sf_${[...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function mergeSnapshotIntoTasks({

@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { seaFocusStorage } from './api/seaFocusStorage';
 import {
   DEFAULT_SEA_FOCUS_SYNC_ENDPOINT,
+  getOrCreateSeaFocusSyncClientId,
   pullConfiguredSeaFocusSnapshot,
   readSeaFocusSyncConfig,
   writeSeaFocusSyncConfig,
@@ -36,6 +37,7 @@ export default function App() {
   const [records, setRecords] = useState<FocusRecord[]>(() => seaFocusStorage.loadFocusRecords());
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => seaFocusStorage.loadJournalEntries());
   const [syncConfig, setSyncConfig] = useState<SeaFocusSyncConfig>(() => loadInitialSyncConfig());
+  const [syncClientId] = useState(() => loadInitialSyncClientId());
   const [syncStatus, setSyncStatus] = useState<SyncStatusState>(() => (
     syncConfig.readToken ? { state: 'idle' } : { state: 'not_configured' }
   ));
@@ -311,6 +313,7 @@ export default function App() {
       {isSyncSettingsOpen && (
         <SyncSettingsModal
           initialConfig={syncConfig}
+          clientId={syncClientId}
           status={syncStatus}
           onSave={saveSyncConfig}
           onSync={saveSyncConfig}
@@ -319,6 +322,14 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function loadInitialSyncClientId(): string {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return '';
+  }
+
+  return getOrCreateSeaFocusSyncClientId(window.localStorage);
 }
 
 function loadInitialSyncConfig(): SeaFocusSyncConfig {
