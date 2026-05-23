@@ -1,4 +1,4 @@
-import { Task, TaskQuadrant } from '../types';
+import { FocusRecord, Task, TaskQuadrant } from '../types';
 import { SeaFocusStorageApi } from './seaFocusStorage';
 
 const SYNC_CURSOR_KEY = 'sea-focus-sync-cursor';
@@ -6,6 +6,7 @@ const SYNC_TASK_MAP_KEY = 'sea-focus-sync-task-map';
 const SYNC_ENDPOINT_KEY = 'sea-focus-sync-endpoint';
 const SYNC_READ_TOKEN_KEY = 'sea-focus-sync-read-token';
 const SYNC_CLIENT_ID_KEY = 'sea-focus-sync-client-id';
+const SYNC_OUTBOX_KEY = 'sea-focus-sync-outbox';
 
 export const DEFAULT_SEA_FOCUS_SYNC_ENDPOINT = 'https://seafocus.opsevo.cn';
 
@@ -76,8 +77,14 @@ export type SeaFocusPullResult =
   | { status: 'empty'; tasks: Task[] }
   | { status: 'not_configured'; tasks: Task[] };
 
+export type SeaFocusUploadResult =
+  | { status: 'uploaded'; sent: number; accepted: number; duplicates: number }
+  | { status: 'empty'; sent: 0 }
+  | { status: 'not_configured'; sent: 0 };
+
 export interface SeaFocusSyncApi {
   pullSnapshot: (config: SeaFocusSyncConfig) => Promise<SeaFocusPullResult>;
+  uploadClientEvents: (config: SeaFocusSyncConfig) => Promise<SeaFocusUploadResult>;
 }
 
 export function createSeaFocusSync({
@@ -135,6 +142,48 @@ export function createSeaFocusSync({
       });
 
       return { status: 'merged', revision: body.revision, tasks: mergeResult.tasks };
+    },
+
+    async uploadClientEvents(config) {
+      const outbox = readClientEventOutbox(backend);
+      const batch = buildClientEventBatch({
+        backend,
+        storage,
+        uploadedEventIds: outbox.uploadedEventIds,
+      });
+      const sent = countClientEvents(batch);
+      if (sent === 0) {
+        return { status: 'empty', sent: 0 };
+      }
+
+      const endpoint = new URL('/v1/client-events', normalizeEndpoint(config.endpoint)).toString();
+      const response = await fetcher(endpoint, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${config.readToken}`,
+          'content-type': 'application/json',
+          'x-sea-focus-client-id': batch.client_id,
+          'x-sea-focus-platform': 'android',
+        },
+        body: JSON.stringify(batch),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Client event upload failed with HTTP ${response.status}`);
+      }
+
+      const body = await response.json() as Partial<{ accepted: number; duplicates: number }>;
+      const eventIds = collectClientEventIds(batch);
+      writeClientEventOutbox(backend, {
+        uploadedEventIds: new Set([...outbox.uploadedEventIds, ...eventIds]),
+      });
+
+      return {
+        status: 'uploaded',
+        sent,
+        accepted: Number(body.accepted ?? 0),
+        duplicates: Number(body.duplicates ?? 0),
+      };
     },
   };
 }
@@ -205,6 +254,23 @@ export async function pullConfiguredSeaFocusSnapshot({
   }
 
   return createSeaFocusSync({ backend, storage, fetcher }).pullSnapshot(config);
+}
+
+export async function uploadConfiguredSeaFocusClientEvents({
+  backend,
+  storage,
+  fetcher = fetch,
+}: {
+  backend: SeaFocusSyncBackend;
+  storage: SeaFocusStorageApi;
+  fetcher?: Fetcher;
+}): Promise<SeaFocusUploadResult> {
+  const config = readSeaFocusSyncConfig(backend);
+  if (!config) {
+    return { status: 'not_configured', sent: 0 };
+  }
+
+  return createSeaFocusSync({ backend, storage, fetcher }).uploadClientEvents(config);
 }
 
 function createDefaultSeaFocusSyncClientId(): string {
@@ -364,6 +430,131 @@ function writeSyncCursor(backend: SeaFocusSyncBackend, cursor: {
 
 function buildServerLocalTaskId(serverTaskId: string): string {
   return `server:${serverTaskId}`;
+}
+
+interface ClientEventOutbox {
+  uploadedEventIds: Set<string>;
+}
+
+interface SeaFocusClientEventBatch {
+  schema_version: 1;
+  client_id: string;
+  client_time: string;
+  last_seen_cursor: string | null;
+  tasks_upserted: SeaFocusClientTaskEvent[];
+  task_tombstones: SeaFocusClientTaskTombstoneEvent[];
+  focus_records_completed: SeaFocusClientFocusRecordEvent[];
+}
+
+interface SeaFocusClientTaskEvent {
+  event_id: string;
+  id: string;
+  server_task_id: string | null;
+  origin: 'server' | 'client';
+  title: string;
+  quadrant: TaskQuadrant;
+  completed: boolean;
+  completedAt: string | null;
+  date: string;
+}
+
+interface SeaFocusClientFocusRecordEvent extends FocusRecord {
+  event_id: string;
+  task: FocusRecord['task'] | null;
+}
+
+interface SeaFocusClientTaskTombstoneEvent {
+  event_id: string;
+}
+
+function buildClientEventBatch({
+  backend,
+  storage,
+  uploadedEventIds,
+}: {
+  backend: SeaFocusSyncBackend;
+  storage: SeaFocusStorageApi;
+  uploadedEventIds: Set<string>;
+}): SeaFocusClientEventBatch {
+  const taskMapByLocalId = new Map(readSyncTaskMap(backend).map((entry) => [entry.local_task_id, entry]));
+  const tasks_upserted = storage.loadTasks()
+    .filter((task) => task.completed)
+    .map((task) => buildCompletedTaskEvent(task, taskMapByLocalId.get(task.id)))
+    .filter((event) => !uploadedEventIds.has(event.event_id));
+  const focus_records_completed = storage.loadFocusRecords()
+    .map(buildFocusRecordEvent)
+    .filter((event) => !uploadedEventIds.has(event.event_id));
+
+  return {
+    schema_version: 1,
+    client_id: getOrCreateSeaFocusSyncClientId(backend),
+    client_time: new Date().toISOString(),
+    last_seen_cursor: readSyncCursor(backend)?.revision ?? null,
+    tasks_upserted,
+    task_tombstones: [],
+    focus_records_completed,
+  };
+}
+
+function buildCompletedTaskEvent(task: Task, mapEntry?: SyncTaskMapEntry): SeaFocusClientTaskEvent {
+  const canonicalTaskId = mapEntry?.server_task_id ?? task.id;
+  const completedAt = task.completedAt ?? task.date;
+
+  return {
+    event_id: `task_completed:${toEventIdPart(canonicalTaskId)}:${toEventIdPart(completedAt)}`,
+    id: task.id,
+    server_task_id: mapEntry?.server_task_id ?? null,
+    origin: mapEntry?.origin ?? 'client',
+    title: task.title,
+    quadrant: task.quadrant,
+    completed: task.completed,
+    completedAt,
+    date: task.date,
+  };
+}
+
+function buildFocusRecordEvent(record: FocusRecord): SeaFocusClientFocusRecordEvent {
+  return {
+    ...record,
+    event_id: `focus_completed:${toEventIdPart(record.id)}:${toEventIdPart(record.timestamp)}`,
+    task: record.task ?? null,
+  };
+}
+
+function countClientEvents(batch: SeaFocusClientEventBatch): number {
+  return batch.tasks_upserted.length
+    + batch.task_tombstones.length
+    + batch.focus_records_completed.length;
+}
+
+function collectClientEventIds(batch: SeaFocusClientEventBatch): string[] {
+  return [
+    ...batch.tasks_upserted.map((event) => event.event_id),
+    ...batch.task_tombstones.map((event) => event.event_id),
+    ...batch.focus_records_completed.map((event) => event.event_id),
+  ];
+}
+
+function readClientEventOutbox(backend: SeaFocusSyncBackend): ClientEventOutbox {
+  try {
+    const parsed = JSON.parse(backend.getItem(SYNC_OUTBOX_KEY) ?? '{}');
+    const values = Array.isArray(parsed?.uploaded_event_ids) ? parsed.uploaded_event_ids : [];
+    return {
+      uploadedEventIds: new Set(values.filter((value: unknown) => typeof value === 'string')),
+    };
+  } catch {
+    return { uploadedEventIds: new Set() };
+  }
+}
+
+function writeClientEventOutbox(backend: SeaFocusSyncBackend, outbox: ClientEventOutbox) {
+  backend.setItem(SYNC_OUTBOX_KEY, JSON.stringify({
+    uploaded_event_ids: [...outbox.uploadedEventIds].sort(),
+  }));
+}
+
+function toEventIdPart(value: string): string {
+  return value.replace(/[^A-Za-z0-9._:-]/g, '_') || 'unknown';
 }
 
 function normalizeEndpoint(endpoint: string): string {

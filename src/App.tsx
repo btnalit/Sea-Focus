@@ -18,6 +18,7 @@ import {
   getOrCreateSeaFocusSyncClientId,
   pullConfiguredSeaFocusSnapshot,
   readSeaFocusSyncConfig,
+  uploadConfiguredSeaFocusClientEvents,
   writeSeaFocusSyncConfig,
   type SeaFocusPullResult,
   type SeaFocusSyncConfig,
@@ -76,6 +77,10 @@ export default function App() {
         }
 
         applySyncResult(result, setTasks, setSyncStatus);
+        await uploadConfiguredSeaFocusClientEvents({
+          backend: window.localStorage,
+          storage: seaFocusStorage,
+        });
       } catch (error) {
         if (!cancelled) {
           setSyncStatus({ state: 'error', message: getSyncErrorMessage(error) });
@@ -104,6 +109,10 @@ export default function App() {
         storage: seaFocusStorage,
       });
       applySyncResult(result, setTasks, setSyncStatus);
+      await uploadConfiguredSeaFocusClientEvents({
+        backend: window.localStorage,
+        storage: seaFocusStorage,
+      });
     } catch (error) {
       setSyncStatus({ state: 'error', message: getSyncErrorMessage(error) });
       console.warn('Sea Focus sync failed', error);

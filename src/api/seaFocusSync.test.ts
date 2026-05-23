@@ -7,6 +7,7 @@ import {
   pullConfiguredSeaFocusSnapshot,
   readSeaFocusSyncConfig,
   readSyncTaskMap,
+  uploadConfiguredSeaFocusClientEvents,
   writeSeaFocusSyncConfig,
   type SeaFocusSyncSnapshotResponse,
 } from './seaFocusSync';
@@ -289,4 +290,150 @@ test('configured pull is a no-op when sync settings are absent', async () => {
 
   assert.equal(result.status, 'not_configured');
   assert.deepEqual(storage.loadTasks(), []);
+});
+
+test('uploads completed tasks and focus records once with stable client event ids', async () => {
+  const backend = createMemoryStorage();
+  const storage = createSeaFocusStorage(backend);
+  backend.setItem('sea-focus-sync-client-id', 'sf_test_device');
+  writeSeaFocusSyncConfig(backend, {
+    endpoint: 'https://personal.opsevo.cn',
+    readToken: 'read-token',
+  });
+  storage.saveTasks([
+    {
+      id: 'server:task-server-1',
+      title: 'Review Personal Ops design',
+      quadrant: 'urgent-important',
+      completed: true,
+      completedAt: '2026-05-24',
+      date: '2026-05-24',
+    },
+    {
+      id: 'local-active-task',
+      title: 'Still active',
+      quadrant: 'not-urgent-important',
+      completed: false,
+      date: '2026-05-24',
+    },
+  ]);
+  storage.saveFocusRecords([
+    {
+      id: 'focus-1',
+      type: 'pomodoro',
+      duration: 1500,
+      category: '深度工作',
+      timestamp: '2026-05-24T09:30:00.000Z',
+      task: {
+        taskId: 'server:task-server-1',
+        taskTitle: 'Review Personal Ops design',
+        taskQuadrant: 'urgent-important',
+        taskDate: '2026-05-24',
+        taskLinkStatus: 'active',
+      },
+    },
+  ]);
+  backend.setItem('sea-focus-sync-task-map', JSON.stringify([
+    {
+      local_task_id: 'server:task-server-1',
+      server_task_id: 'task-server-1',
+      origin: 'server',
+      plan_date: '2026-05-24',
+      plan_scope: 'today',
+      last_seen_revision: 'rev_20260523_213000_ab12',
+      local_completed_pending_upload: true,
+      mapping_status: 'active',
+    },
+  ]));
+  const requests: Array<{
+    url: string;
+    method?: string;
+    headers: Record<string, string | null>;
+    body: {
+      client_id: string;
+      client_time: string;
+      tasks_upserted: Array<Record<string, unknown>>;
+      task_tombstones: Array<Record<string, unknown>>;
+      focus_records_completed: Array<Record<string, unknown>>;
+    };
+  }> = [];
+  const fetcher: typeof fetch = async (url, init) => {
+    const headers = new Headers(init?.headers);
+    const body = JSON.parse(String(init?.body));
+    requests.push({
+      url: String(url),
+      method: init?.method,
+      headers: {
+        authorization: headers.get('authorization'),
+        clientId: headers.get('x-sea-focus-client-id'),
+        platform: headers.get('x-sea-focus-platform'),
+      },
+      body,
+    });
+    return new Response(JSON.stringify({ status: 'ok', accepted: 2, duplicates: 0 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const first = await uploadConfiguredSeaFocusClientEvents({ backend, storage, fetcher });
+  const second = await uploadConfiguredSeaFocusClientEvents({ backend, storage, fetcher });
+
+  assert.deepEqual(first, { status: 'uploaded', sent: 2, accepted: 2, duplicates: 0 });
+  assert.deepEqual(second, { status: 'empty', sent: 0 });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, 'https://personal.opsevo.cn/v1/client-events');
+  assert.deepEqual(requests[0].headers, {
+    authorization: 'Bearer read-token',
+    clientId: 'sf_test_device',
+    platform: 'android',
+  });
+  assert.equal(requests[0].body.client_id, 'sf_test_device');
+  assert.match(requests[0].body.client_time, /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(requests[0].body.tasks_upserted, [
+    {
+      event_id: 'task_completed:task-server-1:2026-05-24',
+      id: 'server:task-server-1',
+      server_task_id: 'task-server-1',
+      origin: 'server',
+      title: 'Review Personal Ops design',
+      quadrant: 'urgent-important',
+      completed: true,
+      completedAt: '2026-05-24',
+      date: '2026-05-24',
+    },
+  ]);
+  assert.deepEqual(requests[0].body.task_tombstones, []);
+  assert.deepEqual(requests[0].body.focus_records_completed, [
+    {
+      event_id: 'focus_completed:focus-1:2026-05-24T09:30:00.000Z',
+      id: 'focus-1',
+      type: 'pomodoro',
+      duration: 1500,
+      category: '深度工作',
+      timestamp: '2026-05-24T09:30:00.000Z',
+      task: {
+        taskId: 'server:task-server-1',
+        taskTitle: 'Review Personal Ops design',
+        taskQuadrant: 'urgent-important',
+        taskDate: '2026-05-24',
+        taskLinkStatus: 'active',
+      },
+    },
+  ]);
+});
+
+test('configured client event upload is a no-op when sync settings are absent', async () => {
+  const backend = createMemoryStorage();
+  const storage = createSeaFocusStorage(backend);
+  let fetchCalls = 0;
+  const fetcher: typeof fetch = async () => {
+    fetchCalls += 1;
+    return new Response('{}');
+  };
+
+  const result = await uploadConfiguredSeaFocusClientEvents({ backend, storage, fetcher });
+
+  assert.deepEqual(result, { status: 'not_configured', sent: 0 });
+  assert.equal(fetchCalls, 0);
 });
