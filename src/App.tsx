@@ -18,6 +18,8 @@ import {
   getOrCreateSeaFocusSyncClientId,
   pullConfiguredSeaFocusSnapshot,
   readSeaFocusSyncConfig,
+  saveFocusRecordsAndUploadConfiguredSeaFocusClientEvents,
+  saveTasksAndUploadConfiguredSeaFocusClientEvents,
   uploadConfiguredSeaFocusClientEvents,
   writeSeaFocusSyncConfig,
   type SeaFocusPullResult,
@@ -139,6 +141,34 @@ export default function App() {
     await runManualSync();
   }, [runManualSync]);
 
+  const uploadLocalTaskChanges = useCallback((nextTasks: Task[]) => {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+
+    void saveTasksAndUploadConfiguredSeaFocusClientEvents({
+      backend: window.localStorage,
+      storage: seaFocusStorage,
+      tasks: nextTasks,
+    }).catch((error) => {
+      console.warn('Sea Focus task auto sync failed', error);
+    });
+  }, []);
+
+  const uploadLocalFocusChanges = useCallback((nextRecords: FocusRecord[]) => {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+
+    void saveFocusRecordsAndUploadConfiguredSeaFocusClientEvents({
+      backend: window.localStorage,
+      storage: seaFocusStorage,
+      records: nextRecords,
+    }).catch((error) => {
+      console.warn('Sea Focus focus auto sync failed', error);
+    });
+  }, []);
+
   const addTask = (task: Omit<Task, 'id' | 'completed' | 'completedAt'>) => {
     const newTask: Task = {
       ...task,
@@ -149,7 +179,9 @@ export default function App() {
   };
 
   const toggleTask = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? toggleTaskCompletion(t) : t));
+    const nextTasks = tasks.map(t => t.id === id ? toggleTaskCompletion(t) : t);
+    setTasks(nextTasks);
+    uploadLocalTaskChanges(nextTasks);
   };
 
   const deleteTask = (id: string) => {
@@ -162,7 +194,9 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       timestamp: new Date().toISOString(),
     };
-    setRecords([newRecord, ...records]);
+    const nextRecords = [newRecord, ...records];
+    setRecords(nextRecords);
+    uploadLocalFocusChanges(nextRecords);
   };
 
   const addJournalEntry = async (

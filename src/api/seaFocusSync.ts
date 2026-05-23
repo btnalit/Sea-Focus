@@ -273,6 +273,36 @@ export async function uploadConfiguredSeaFocusClientEvents({
   return createSeaFocusSync({ backend, storage, fetcher }).uploadClientEvents(config);
 }
 
+export async function saveTasksAndUploadConfiguredSeaFocusClientEvents({
+  backend,
+  storage,
+  tasks,
+  fetcher = fetch,
+}: {
+  backend: SeaFocusSyncBackend;
+  storage: SeaFocusStorageApi;
+  tasks: Task[];
+  fetcher?: Fetcher;
+}): Promise<SeaFocusUploadResult> {
+  storage.saveTasks(tasks);
+  return uploadConfiguredSeaFocusClientEvents({ backend, storage, fetcher });
+}
+
+export async function saveFocusRecordsAndUploadConfiguredSeaFocusClientEvents({
+  backend,
+  storage,
+  records,
+  fetcher = fetch,
+}: {
+  backend: SeaFocusSyncBackend;
+  storage: SeaFocusStorageApi;
+  records: FocusRecord[];
+  fetcher?: Fetcher;
+}): Promise<SeaFocusUploadResult> {
+  storage.saveFocusRecords(records);
+  return uploadConfiguredSeaFocusClientEvents({ backend, storage, fetcher });
+}
+
 function createDefaultSeaFocusSyncClientId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
   if (randomUuid) {
