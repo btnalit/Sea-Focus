@@ -75,32 +75,21 @@ jobs:
         run: |
           chmod +x ./gradlew
           KEYSTORE_PATH="${RUNNER_TEMP}/sea-focus-ci-release.jks"
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            if [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
-              echo "Release keystore secret is set, but password or alias secrets are missing." >&2
-              exit 1
-            fi
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
-            STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
-            KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
-            KEY_ALIAS="$RELEASE_KEY_ALIAS"
-          else
-            STORE_PASSWORD="sea-focus-ci-release"
-            KEY_PASSWORD="sea-focus-ci-release"
-            KEY_ALIAS="sea-focus-ci-release"
-            keytool -genkeypair \
-              -v \
-              -storetype PKCS12 \
-              -keystore "$KEYSTORE_PATH" \
-              -alias "$KEY_ALIAS" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass "$STORE_PASSWORD" \
-              -keypass "$KEY_PASSWORD" \
-              -dname "CN=Sea Focus CI,O=Sea Focus,C=US"
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
+            echo "Release signing secrets are required so APK updates keep the same Android signing certificate." >&2
+            exit 1
           fi
+
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          STORE_PASSWORD="$RELEASE_STORE_PASSWORD"
+          KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+          KEY_ALIAS="$RELEASE_KEY_ALIAS"
+          VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"
+          echo "Building Sea Focus ${VERSION_NAME} (${VERSION_CODE})"
           ./gradlew assembleRelease --no-daemon \
+            -PseaFocusVersionCode="$VERSION_CODE" \
+            -PseaFocusVersionName="$VERSION_NAME" \
             -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \

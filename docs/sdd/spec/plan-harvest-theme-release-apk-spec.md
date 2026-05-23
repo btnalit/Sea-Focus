@@ -34,7 +34,8 @@ Clarify the plan page "今日收获" data linkage, add a daily rotating nature-t
 - The uploaded artifact must be named for release output.
 - The workflow must not upload debug APK paths.
 - CI config validation must fail if the workflow regresses to debug APK output.
-- If release keystore GitHub Secrets are configured, the workflow should use them; otherwise it may generate a temporary CI signing key so the release build still completes.
+- The workflow must use release keystore GitHub Secrets and fail when they are missing, because a temporary CI signing key would break Android overlay installs.
+- The workflow must pass a CI-derived, monotonically increasing Android `versionCode` into Gradle.
 
 ## Acceptance Criteria
 

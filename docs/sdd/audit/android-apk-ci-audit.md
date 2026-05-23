@@ -46,7 +46,8 @@ Use Capacitor because the repository is already a web app and Capacitor is desig
 ## Risks
 
 - Release APK is now the CI target instead of debug APK.
-- Release signing supports a configured GitHub secret keystore and falls back to a generated CI signing key when secrets are absent.
+- Release signing requires a configured GitHub secret keystore. The workflow must not generate a fresh CI signing key, because Android treats that as a different signer and blocks overlay installs.
+- CI release builds derive `versionCode` from `GITHUB_RUN_NUMBER` and pass it into Gradle so each artifact can upgrade the previous one.
 - Android background timer accuracy may need native plugins later if the product requires reliable notifications while the app is backgrounded.
 - Local machine Java/Android SDK versions can differ from GitHub-hosted runners; CI uses JDK 21 and the `ubuntu-24.04` runner to pin the expected build environment.
 - Local verification cannot complete `assembleRelease` on this machine until Android SDK is installed and `ANDROID_HOME` or `ANDROID_SDK_ROOT` is configured.

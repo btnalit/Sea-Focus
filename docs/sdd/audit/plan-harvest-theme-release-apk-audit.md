@@ -14,7 +14,7 @@ Date: 2026-04-24
 - `PlanPage` does not duplicate focus-stat calculation; it receives `todayPomodoros` as a prop and renders it in the header.
 - The previous harvest circle only rendered a blank muted fill. Added a deterministic daily theme helper and an inline nature-themed illustration so the circle rotates by local date.
 - GitHub Actions was still a debug APK pipeline. Switched the job, Gradle task, artifact name, and artifact path to release APK output.
-- Release signing now supports real GitHub Secrets when configured and falls back to a generated CI key so the release workflow remains runnable without committing private keys.
+- Release signing now requires real GitHub Secrets; generating a fresh CI key is intentionally disallowed because it breaks Android overlay installs.
 
 ## Verification
 

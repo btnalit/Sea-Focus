@@ -123,6 +123,9 @@ if (existsSync(androidAppBuildPath)) {
   const androidAppBuild = readProjectFile('android/app/build.gradle')
   check(androidAppBuild.includes('namespace = "com.seafocus.app"'), 'Android namespace must be com.seafocus.app')
   check(androidAppBuild.includes('applicationId "com.seafocus.app"'), 'Android applicationId must be com.seafocus.app')
+  check(androidAppBuild.includes('seaFocusVersionCode'), 'Android versionCode must be driven by a Gradle property')
+  check(androidAppBuild.includes('seaFocusVersionName'), 'Android versionName must be driven by a Gradle property')
+  check(!androidAppBuild.includes('versionCode 1'), 'Android versionCode must not be hard-coded to 1')
 }
 
 if (existsSync(androidStringsPath)) {
@@ -174,8 +177,13 @@ if (existsSync(workflowPath)) {
   check(hasRunStep(steps, 'SDKMANAGER='), 'workflow must resolve sdkmanager from ANDROID_HOME')
   check(hasRunStep(steps, '"$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"'), 'workflow must ensure Android SDK 36 build components through resolved sdkmanager')
   check(hasRunStep(steps, 'RELEASE_KEYSTORE_BASE64'), 'workflow must support release keystore secrets')
-  check(hasRunStep(steps, 'keytool -genkeypair'), 'workflow must create a CI release signing key')
+  check(hasRunStep(steps, 'Release signing secrets are required'), 'workflow must fail when release signing secrets are missing')
+  check(!hasRunStep(steps, 'keytool -genkeypair'), 'workflow must not generate a fresh release key per CI run')
+  check(hasRunStep(steps, 'VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))'), 'workflow must derive monotonically increasing Android versionCode from GITHUB_RUN_NUMBER')
+  check(hasRunStep(steps, 'VERSION_NAME="1.0.${GITHUB_RUN_NUMBER}"'), 'workflow must derive Android versionName from GITHUB_RUN_NUMBER')
   check(hasRunStep(steps, './gradlew assembleRelease'), 'workflow must build the Android release APK')
+  check(hasRunStep(steps, '-PseaFocusVersionCode="$VERSION_CODE"'), 'workflow must pass the derived versionCode into Gradle')
+  check(hasRunStep(steps, '-PseaFocusVersionName="$VERSION_NAME"'), 'workflow must pass the derived versionName into Gradle')
   check(hasRunStep(steps, 'android.injected.signing.store.file'), 'workflow must inject signing config for the release APK')
   check(!hasRunStep(steps, './gradlew assembleDebug'), 'workflow must not build the Android debug APK')
   check(

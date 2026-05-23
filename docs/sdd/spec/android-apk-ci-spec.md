@@ -58,7 +58,8 @@ The workflow must:
 - Set up JDK 21 for the Android Gradle build.
 - Ensure Android SDK platform 36 and build-tools 36.0.0 are available.
 - Build with the Android Gradle wrapper: `./gradlew assembleRelease`.
-- Sign the release APK through configured GitHub release keystore secrets, or generate a temporary CI signing key when secrets are absent.
+- Sign the release APK through configured GitHub release keystore secrets, and fail the workflow when those secrets are absent.
+- Derive a monotonically increasing Android `versionCode` from `GITHUB_RUN_NUMBER` and pass both `versionCode` and `versionName` into Gradle.
 - Upload the generated APK as an artifact.
 
 ## Test Mapping
@@ -77,5 +78,6 @@ The workflow must:
 - Running `npx cap sync android` succeeds.
 - Running Android Gradle `assembleRelease` succeeds or reports only a local environment blocker that is documented in the audit.
 - GitHub Actions will publish a release APK artifact after the files are pushed to GitHub.
+- Each published release APK is signed with the same configured keystore and has a higher `versionCode` than the previous CI artifact, so Android can overlay install it.
 - README explains local web development and GitHub APK artifact download.
 - `.env.example` no longer asks for unused Gemini credentials.
