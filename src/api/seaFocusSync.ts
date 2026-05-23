@@ -527,13 +527,14 @@ function buildClientEventBatch({
 }
 
 function buildCompletedTaskEvent(task: Task, mapEntry?: SyncTaskMapEntry): SeaFocusClientTaskEvent {
-  const canonicalTaskId = mapEntry?.server_task_id ?? task.id;
+  const canonicalTaskId = mapEntry?.origin === 'server' ? mapEntry.server_task_id : task.id;
+  const serverTaskId = mapEntry?.origin === 'server' ? mapEntry.server_task_id : null;
   const completedAt = task.completedAt ?? task.date;
 
   return {
     event_id: `task_completed:${toEventIdPart(canonicalTaskId)}:${toEventIdPart(completedAt)}`,
     id: task.id,
-    server_task_id: mapEntry?.server_task_id ?? null,
+    server_task_id: serverTaskId,
     origin: mapEntry?.origin ?? 'client',
     title: task.title,
     quadrant: task.quadrant,

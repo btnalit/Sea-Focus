@@ -423,6 +423,64 @@ test('uploads completed tasks and focus records once with stable client event id
   ]);
 });
 
+test('does not re-upload a client-origin completed task after it is folded into a server snapshot', async () => {
+  const backend = createMemoryStorage();
+  const storage = createSeaFocusStorage(backend);
+  backend.setItem('sea-focus-sync-client-id', 'sf_test_device');
+  backend.setItem('sea-focus-sync-outbox', JSON.stringify({
+    uploaded_event_ids: ['task_completed:local-task-1:2026-05-24'],
+  }));
+  writeSeaFocusSyncConfig(backend, {
+    endpoint: 'https://personal.opsevo.cn',
+    readToken: 'read-token',
+  });
+  storage.saveTasks([
+    {
+      id: 'local-task-1',
+      title: 'Local completed task',
+      quadrant: 'urgent-important',
+      completed: true,
+      completedAt: '2026-05-24',
+      date: '2026-05-24',
+    },
+  ]);
+  const sync = createSeaFocusSync({
+    backend,
+    storage,
+    fetcher: okFetch(snapshotResponse({
+      tasks: [
+        {
+          id: 'client:sf_test_device:local-task-1',
+          client_task_id: 'local-task-1',
+          origin: 'client',
+          title: 'Local completed task',
+          quadrant: 'urgent-important',
+          completed: true,
+          completedAt: '2026-05-24',
+          date: '2026-05-24',
+        },
+      ],
+    })),
+  });
+
+  await sync.pullSnapshot({ endpoint: 'https://personal.opsevo.cn', readToken: 'read-token' });
+
+  let fetchCalls = 0;
+  const uploadFetcher: typeof fetch = async () => {
+    fetchCalls += 1;
+    return new Response('{}');
+  };
+
+  const result = await uploadConfiguredSeaFocusClientEvents({
+    backend,
+    storage,
+    fetcher: uploadFetcher,
+  });
+
+  assert.deepEqual(result, { status: 'empty', sent: 0 });
+  assert.equal(fetchCalls, 0);
+});
+
 test('configured client event upload is a no-op when sync settings are absent', async () => {
   const backend = createMemoryStorage();
   const storage = createSeaFocusStorage(backend);
